@@ -1528,16 +1528,85 @@ do
 		return info
 	end
 
+	-- Custom rename dialog for Talented
+	local function CreateRenameSpecDialog()
+		StaticPopupDialogs["TALENTED_RENAME_SPEC"] = {
+			text = "Enter a new name for this spec:",
+			button1 = ACCEPT,
+			button2 = CANCEL,
+			hasEditBox = 1,
+			maxLetters = 32,
+			whileDead = 1,
+			hideOnEscape = 1,
+			timeout = 0,
+			exclusive = 1,
+			OnAccept = function(self)
+				local newName = self.editBox:GetText()
+				local talentGroup = self.data
+				if newName and newName ~= "" and talentGroup then
+					-- Use the server's function if available
+					if SetCustomGameDataString then
+						SetCustomGameDataString(21, talentGroup, newName)
+					end
+					-- Store locally as backup
+					Talented.db.profile.specNames = Talented.db.profile.specNames or {}
+					Talented.db.profile.specNames[talentGroup] = newName
+					
+					-- Update the UI
+					if Talented.tabs then
+						Talented.tabs:Update()
+					end
+					-- Update any open Talented frames
+					if Talented.base and Talented.base:IsShown() then
+						Talented:UpdateView()
+					end
+				end
+			end,
+			OnShow = function(self)
+				local talentGroup = self.data
+				if talentGroup then
+					local currentName = Talented:GetTalentGroupName(talentGroup)
+					self.editBox:SetText(currentName)
+					self.editBox:HighlightText()
+					self.editBox:SetFocus()
+				end
+			end,
+			EditBoxOnEnterPressed = function(self)
+				local parent = self:GetParent()
+				if parent.button1:IsEnabled() then
+					StaticPopupDialogs[parent.which].OnAccept(parent)
+					parent:Hide()
+				end
+			end,
+			EditBoxOnEscapePressed = function(self)
+				self:GetParent():Hide()
+			end
+		}
+	end
+	
+	-- Call this to create the dialog
+	CreateRenameSpecDialog()
+
 	local function TabFrame_OnEnter(self)
 		local info = specs[self.type]
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:AddLine(info.tooltip)
+		
+		-- Use the custom name from GetTalentGroupName
+		local tooltipText = info.tooltip
+		if info.talentGroup then
+			tooltipText = Talented:GetTalentGroupName(info.talentGroup)
+		end
+		
+		GameTooltip:AddLine(tooltipText)
 		for index, cache in ipairs(info.cache) do
 			local color = info.primary == index and GREEN_FONT_COLOR or HIGHLIGHT_FONT_COLOR
 			GameTooltip:AddDoubleLine(cache.name, cache.points, HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b, color.r, color.g, color.b, 1)
 		end
-		if not info.pet and not self:GetChecked() then
-			GameTooltip:AddLine(L["Right-click to activate this spec"], GREEN_FONT_COLOR.r, GREEN_FONT_COLOR.g, GREEN_FONT_COLOR.b, 1)
+		if not info.pet then
+			if not self:GetChecked() then
+				GameTooltip:AddLine("Right-click to activate this spec", GREEN_FONT_COLOR.r, GREEN_FONT_COLOR.g, GREEN_FONT_COLOR.b, 1)
+			end
+			GameTooltip:AddLine("Alt+Left-click to rename this spec", GREEN_FONT_COLOR.r, GREEN_FONT_COLOR.g, GREEN_FONT_COLOR.b, 1)
 		end
 		GameTooltip:Show()
 	end
@@ -1555,12 +1624,24 @@ do
 
 	local function TabFrame_OnClick(self, button)
 		local info = specs[self.type]
+		
+		-- ALT + Left click = Rename (use our custom dialog)
+		if button == "LeftButton" and IsAltKeyDown() and info.talentGroup and not info.pet then
+			local dialog = StaticPopup_Show("TALENTED_RENAME_SPEC")
+			if dialog then
+				dialog.data = info.talentGroup
+			end
+			return
+		end
+		
+		-- Right click = Activate spec
 		if button == "RightButton" then
 			if not info.pet and not InCombatLockdown() then
 				SetActiveTalentGroup(info.talentGroup)
 				Tabs_UpdateCheck(self:GetParent(), Talented.alternates[info.talentGroup])
 			end
 		else
+			-- Normal left click = Open template
 			local template
 			if info.pet then
 				template = Talented.pet_current
