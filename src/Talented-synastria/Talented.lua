@@ -1162,13 +1162,30 @@ do
 end
 
 function Talented:GetTalentGroupName(talentGroup)
-	if talentGroup == 1 then
-		return TALENT_SPEC_PRIMARY
-	elseif talentGroup == 2 then
-		return TALENT_SPEC_SECONDARY
-	else
-		return string.format("Spec %d", talentGroup)
-	end
+    -- Ensure talentGroup is valid
+    if not talentGroup or type(talentGroup) ~= "number" then
+        return "Unknown Spec"
+    end
+    
+    -- Try to get the custom name from the server
+    local customName = GetCustomGameDataString and GetCustomGameDataString(21, talentGroup)
+    if customName and customName ~= "" then
+        return customName
+    end
+    
+    -- Check local storage as fallback
+    if self.db and self.db.profile.specNames and self.db.profile.specNames[talentGroup] then
+        return self.db.profile.specNames[talentGroup]
+    end
+    
+    -- Fallback to default names
+    if talentGroup == 1 then
+        return TALENT_SPEC_PRIMARY or "Spec 1"
+    elseif talentGroup == 2 then
+        return TALENT_SPEC_SECONDARY or "Spec 2"
+    else
+        return string.format("Spec %d", talentGroup)
+    end
 end
 -------------------------------------------------------------------------------
 -- view.lua

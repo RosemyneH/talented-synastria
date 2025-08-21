@@ -1,7 +1,7 @@
 ## Interface: 30300
 ## Title: Talented |cFFA330C9Synastria|r
 ## Notes: The Talent Template Editor
-## Author: Jerry (Kader Edition)
+## Author: Jerry (Kader Edition), Qt, Lulleh
 ## Version: v2.4.8
 ## OptionalDeps: Ace3
 ## SavedVariables: TalentedDB
