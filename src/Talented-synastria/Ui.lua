@@ -1544,13 +1544,17 @@ do
 				local newName = self.editBox:GetText()
 				local talentGroup = self.data
 				if newName and newName ~= "" and talentGroup then
-					-- Use the server's function if available
+					-- Always store locally first (this ensures persistence)
+					if not Talented.db then
+						Talented:OnInitialize()  -- Ensure DB is initialized
+					end
+					Talented.db.profile.specNames = Talented.db.profile.specNames or {}
+					Talented.db.profile.specNames[talentGroup] = newName
+					
+					-- Also use the server's function if available
 					if SetCustomGameDataString then
 						SetCustomGameDataString(21, talentGroup, newName)
 					end
-					-- Store locally as backup
-					Talented.db.profile.specNames = Talented.db.profile.specNames or {}
-					Talented.db.profile.specNames[talentGroup] = newName
 					
 					-- Update the UI
 					if Talented.tabs then

@@ -13,7 +13,8 @@ Talented.defaults = {
 		add_bottom_offset = true,
 		framepos = {},
 		glyph_on_talent_swap = "active",
-		restore_bars = false
+		restore_bars = false,
+		specNames = {}
 	},
 	global = {templates = {}},
 	char = {targets = {}}

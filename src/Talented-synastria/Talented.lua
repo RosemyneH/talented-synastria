@@ -308,12 +308,32 @@ do
 		UIParent:RegisterEvent("CONFIRM_TALENT_WIPE")
 	end
 
+	function Talented:MigrateSpecNames()
+		-- This function ensures any server-stored spec names are also saved locally
+		if not self.db or not self.db.profile then return end
+		
+		self.db.profile.specNames = self.db.profile.specNames or {}
+		
+		-- Check all possible talent groups (up to 6 based on your code)
+		for talentGroup = 1, 6 do
+			-- If we don't have a locally stored name but the server has one, save it
+			if not self.db.profile.specNames[talentGroup] then
+				local serverName = GetCustomGameDataString and GetCustomGameDataString(21, talentGroup)
+				if serverName and serverName ~= "" then
+					self.db.profile.specNames[talentGroup] = serverName
+				end
+			end
+		end
+	end
+
 	function Talented:PLAYER_ENTERING_WORLD()
 		-- Update player specs and perk menu
 		self:UpdatePlayerSpecs()
 		if self.base and self.base.perkTab then
 			self:AddPerksToFrame(self.base)
 		end
+		-- Add this line to migrate spec names
+		self:MigrateSpecNames()
 	end
 
 	function Talented:PLAYER_TALENT_UPDATE()
@@ -1167,15 +1187,20 @@ function Talented:GetTalentGroupName(talentGroup)
         return "Unknown Spec"
     end
     
-    -- Try to get the custom name from the server
-    local customName = GetCustomGameDataString and GetCustomGameDataString(21, talentGroup)
-    if customName and customName ~= "" then
-        return customName
+    -- First check local storage (this persists across sessions)
+    if self.db and self.db.profile and self.db.profile.specNames and self.db.profile.specNames[talentGroup] then
+        return self.db.profile.specNames[talentGroup]
     end
     
-    -- Check local storage as fallback
-    if self.db and self.db.profile.specNames and self.db.profile.specNames[talentGroup] then
-        return self.db.profile.specNames[talentGroup]
+    -- Then try to get the custom name from the server (if it exists)
+    local customName = GetCustomGameDataString and GetCustomGameDataString(21, talentGroup)
+    if customName and customName ~= "" then
+        -- Save it locally for persistence
+        if self.db and self.db.profile then
+            self.db.profile.specNames = self.db.profile.specNames or {}
+            self.db.profile.specNames[talentGroup] = customName
+        end
+        return customName
     end
     
     -- Fallback to default names
