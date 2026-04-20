@@ -364,16 +364,18 @@ do
 
 	local function CreateClassIconButton(parent, index)
 		local button = CreateFrame("CheckButton", nil, parent)
-		button:SetSize(32, 32)
+		button:SetSize(38, 38)
 
 		local border = button:CreateTexture(nil, "BACKGROUND")
-		border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
-		border:SetAllPoints(button)
+		border:SetTexture("Interface\\SpellBook\\SpellBook-SkillLineTab")
+		border:SetSize(64, 64)
+		border:SetPoint("TOPLEFT", -27, 9)
+		border:SetTexCoord(1, 0, 0, 1)
 		button.border = border
 
 		local icon = button:CreateTexture(nil, "ARTWORK")
-		icon:SetPoint("TOPLEFT", 3, -3)
-		icon:SetPoint("BOTTOMRIGHT", -3, 3)
+		icon:SetPoint("TOPLEFT", 2, -2)
+		icon:SetPoint("BOTTOMRIGHT", -2, 2)
 		button.icon = icon
 
 		local highlight = button:CreateTexture(nil, "HIGHLIGHT")
@@ -420,15 +422,15 @@ do
 
 	local function CreateClassSwitchIcons(parent)
 		local f = CreateFrame("Frame", nil, parent)
-		f:SetPoint("TOPRIGHT", parent, "TOPLEFT", 2, -40)
-		f:SetSize(32, 84)
+		f:SetPoint("TOPRIGHT", parent, "TOPLEFT", 4, -40)
+		f:SetSize(38, 96)
 
 		local c1 = CreateClassIconButton(f, 1)
 		c1:SetPoint("TOPLEFT")
 		f.class1 = c1
 
 		local c2 = CreateClassIconButton(f, 2)
-		c2:SetPoint("TOP", c1, "BOTTOM", 0, -10)
+		c2:SetPoint("TOP", c1, "BOTTOM", 0, -12)
 		f.class2 = c2
 
 		parent.classSwitchIcons = f
@@ -1856,7 +1858,7 @@ do
 		local tabs = GetNumTalentTabs(nil, pet)
 		if tabs == 0 then return end
 
-		local imax, min, max, total = 0, 0, 0, 0
+		local imax, max = 1, -1
 		for i = 1, tabs do
 			local cache = info.cache[i]
 			if not cache then
@@ -1865,34 +1867,43 @@ do
 			end
 			local name, icon, points = GetTalentTabInfo(i, nil, pet, talentGroup)
 			cache.name, cache.icon, cache.points = name, icon, points
-			if points < min then
-				min = points
-			end
 			if points > max then
 				imax, max = i, points
 			end
-			total = total + points
 		end
-		info.primary = nil
-		if tabs > 2 then
-			local middle = total - min - max
-			if 3 * (middle - min) < 2 * (max - min) then
-				info.primary = imax
+		local profile = Talented.db and Talented.db.profile
+		local iconMap = profile and profile.specIconTabs
+		if profile and not iconMap then
+			profile.specIconTabs = {}
+			iconMap = profile.specIconTabs
+		end
+		local iconKey = info.pet and "petspec1" or ("spec" .. tostring(talentGroup or 1))
+		local primary = iconMap and iconMap[iconKey]
+		if type(primary) ~= "number" or primary < 1 or primary > tabs then
+			-- Lock icon to a stable tab on first sight to avoid auto-changing with point totals.
+			primary = imax > 0 and imax or 1
+			if iconMap then
+				iconMap[iconKey] = primary
 			end
 		end
+		info.primary = primary
 		return info
 	end
 
 	local function TabFrame_OnEnter(self)
 		local info = specs[self.type]
+		local tooltipTitle = info.tooltip
+		if not info.pet and info.talentGroup then
+			tooltipTitle = Talented:GetTalentGroupName(info.talentGroup) or tooltipTitle
+		end
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:AddLine(info.tooltip)
+		GameTooltip:AddLine(tooltipTitle)
 		for index, cache in ipairs(info.cache) do
 			local color = info.primary == index and GREEN_FONT_COLOR or HIGHLIGHT_FONT_COLOR
 			GameTooltip:AddDoubleLine(cache.name, cache.points, HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b, color.r, color.g, color.b, 1)
 		end
 		if not info.pet and not self:GetChecked() then
-			GameTooltip:AddLine(L["Right-click to activate this spec"], GREEN_FONT_COLOR.r, GREEN_FONT_COLOR.g, GREEN_FONT_COLOR.b, 1)
+			GameTooltip:AddLine("Right-click to edit spec name/icon", GREEN_FONT_COLOR.r, GREEN_FONT_COLOR.g, GREEN_FONT_COLOR.b, 1)
 		end
 		GameTooltip:Show()
 	end
@@ -1908,13 +1919,278 @@ do
 		self.spec2:SetChecked(template == Talented.alternates[2])
 	end
 
+	StaticPopupDialogs["TALENTED_RENAME_SPEC"] = {
+		text = "Rename Spec",
+		button1 = ACCEPT,
+		button2 = CANCEL,
+		hasEditBox = 1,
+		maxLetters = 64,
+		whileDead = 1,
+		timeout = 0,
+		hideOnEscape = 1,
+		OnShow = function(self)
+			local talentGroup = self.data
+			local current = type(talentGroup) == "number" and Talented:GetTalentGroupName(talentGroup) or ""
+			self.editBox:SetText(current or "")
+			self.editBox:SetFocus()
+			self.editBox:HighlightText()
+		end,
+		OnAccept = function(self)
+			local talentGroup = self.data
+			local value = tostring(self.editBox:GetText() or ""):gsub("^%s*(.-)%s*$", "%1")
+			if type(talentGroup) == "number" then
+				if value == "" then
+					Talented:ClearTalentGroupName(talentGroup)
+				else
+					Talented:SetTalentGroupName(talentGroup, value)
+				end
+				if Talented.tabs and Talented.tabs.Update then
+					Talented.tabs:Update()
+				end
+			end
+		end,
+		EditBoxOnEnterPressed = function(self)
+			local parent = self:GetParent()
+			StaticPopupDialogs[parent.which].OnAccept(parent)
+			parent:Hide()
+		end,
+		EditBoxOnEscapePressed = function(self)
+			self:GetParent():Hide()
+		end
+	}
+
+	local function SetSpecIconSelection(info, tabIndex)
+		local profile = Talented.db and Talented.db.profile
+		if not profile then
+			return
+		end
+		profile.specIconTabs = profile.specIconTabs or {}
+		local iconKey = info.pet and "petspec1" or ("spec" .. tostring(info.talentGroup or 1))
+		if type(tabIndex) == "number" and tabIndex > 0 then
+			profile.specIconTabs[iconKey] = tabIndex
+		else
+			profile.specIconTabs[iconKey] = nil
+		end
+		if Talented.tabs and Talented.tabs.Update then
+			Talented.tabs:Update()
+		end
+	end
+
+	local function SetSpecIconPath(info, iconPath)
+		local profile = Talented.db and Talented.db.profile
+		if not profile then
+			return
+		end
+		profile.specIconTabs = profile.specIconTabs or {}
+		profile.specIconPaths = profile.specIconPaths or {}
+		local iconKey = info.pet and "petspec1" or ("spec" .. tostring(info.talentGroup or 1))
+		if type(iconPath) == "string" and iconPath ~= "" then
+			profile.specIconPaths[iconKey] = iconPath
+			profile.specIconTabs[iconKey] = nil
+		else
+			profile.specIconPaths[iconKey] = nil
+		end
+		if Talented.tabs and Talented.tabs.Update then
+			Talented.tabs:Update()
+		end
+	end
+
+	local specIconPicker
+	local function OpenAnySpecIconPicker(info)
+		if not specIconPicker then
+			specIconPicker = CreateFrame("Frame", "TalentedSpecIconPicker", UIParent)
+			specIconPicker:SetSize(320, 250)
+			specIconPicker:SetBackdrop({
+				bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+				edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+				tile = true,
+				tileSize = 32,
+				edgeSize = 24,
+				insets = {left = 8, right = 8, top = 8, bottom = 8}
+			})
+			specIconPicker:SetFrameStrata("FULLSCREEN_DIALOG")
+			specIconPicker:Hide()
+
+			local title = specIconPicker:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+			title:SetPoint("TOP", 0, -12)
+			title:SetText("Choose Any Icon")
+
+			specIconPicker.icons = {}
+			specIconPicker.buttons = {}
+			specIconPicker.page = 1
+			specIconPicker.perPage = 32
+
+			local function CollectIcons()
+				local list, seen = {}, {}
+				local function add(path)
+					if type(path) == "string" and path ~= "" and not seen[path] then
+						seen[path] = true
+						list[#list + 1] = path
+					end
+				end
+				add("Interface\\Icons\\INV_Misc_QuestionMark")
+				if type(GetNumMacroIcons) == "function" and type(GetMacroIconInfo) == "function" then
+					local count = GetNumMacroIcons() or 0
+					for i = 1, count do
+						add(GetMacroIconInfo(i))
+					end
+				elseif type(GetMacroIcons) == "function" then
+					local temp = {}
+					GetMacroIcons(temp)
+					for i = 1, #temp do
+						add(temp[i])
+					end
+				end
+				return list
+			end
+
+			local function UpdatePicker()
+				local startIndex = (specIconPicker.page - 1) * specIconPicker.perPage + 1
+				local totalPages = math.max(1, math.ceil(#specIconPicker.icons / specIconPicker.perPage))
+				if specIconPicker.page > totalPages then
+					specIconPicker.page = totalPages
+					startIndex = (specIconPicker.page - 1) * specIconPicker.perPage + 1
+				end
+				for i = 1, specIconPicker.perPage do
+					local btn = specIconPicker.buttons[i]
+					local idx = startIndex + i - 1
+					local path = specIconPicker.icons[idx]
+					if path then
+						btn.path = path
+						btn.icon:SetTexture(path)
+						btn:Show()
+					else
+						btn.path = nil
+						btn:Hide()
+					end
+				end
+				specIconPicker.pageText:SetText(("Page %d/%d"):format(specIconPicker.page, totalPages))
+				if specIconPicker.page > 1 then specIconPicker.prevBtn:Enable() else specIconPicker.prevBtn:Disable() end
+				if specIconPicker.page < totalPages then specIconPicker.nextBtn:Enable() else specIconPicker.nextBtn:Disable() end
+			end
+
+			for i = 1, specIconPicker.perPage do
+				local btn = CreateFrame("Button", nil, specIconPicker)
+				btn:SetSize(34, 34)
+				local col = bit.band(i - 1, 7)
+				local row = math.floor((i - 1) / 8)
+				btn:SetPoint("TOPLEFT", 18 + col * 36, -34 - row * 38)
+				local icon = btn:CreateTexture(nil, "ARTWORK")
+				icon:SetAllPoints(btn)
+				btn.icon = icon
+				btn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+				btn:SetScript("OnClick", function(self)
+					if self.path and specIconPicker.info then
+						SetSpecIconPath(specIconPicker.info, self.path)
+						specIconPicker:Hide()
+					end
+				end)
+				specIconPicker.buttons[i] = btn
+			end
+
+			specIconPicker.prevBtn = CreateFrame("Button", nil, specIconPicker, "UIPanelButtonTemplate")
+			specIconPicker.prevBtn:SetSize(60, 20)
+			specIconPicker.prevBtn:SetPoint("BOTTOMLEFT", 14, 12)
+			specIconPicker.prevBtn:SetText("Prev")
+			specIconPicker.prevBtn:SetScript("OnClick", function()
+				specIconPicker.page = specIconPicker.page - 1
+				UpdatePicker()
+			end)
+			specIconPicker.nextBtn = CreateFrame("Button", nil, specIconPicker, "UIPanelButtonTemplate")
+			specIconPicker.nextBtn:SetSize(60, 20)
+			specIconPicker.nextBtn:SetPoint("BOTTOMRIGHT", -14, 12)
+			specIconPicker.nextBtn:SetText("Next")
+			specIconPicker.nextBtn:SetScript("OnClick", function()
+				specIconPicker.page = specIconPicker.page + 1
+				UpdatePicker()
+			end)
+			specIconPicker.pageText = specIconPicker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+			specIconPicker.pageText:SetPoint("BOTTOM", 0, 17)
+
+			local closeBtn = CreateFrame("Button", nil, specIconPicker, "UIPanelButtonTemplate")
+			closeBtn:SetSize(60, 20)
+			closeBtn:SetPoint("BOTTOM", 0, 12)
+			closeBtn:SetText("Close")
+			closeBtn:SetScript("OnClick", function()
+				specIconPicker:Hide()
+			end)
+
+			specIconPicker.Refresh = function(self)
+				self.icons = CollectIcons()
+				UpdatePicker()
+			end
+		end
+		specIconPicker.info = info
+		specIconPicker.page = 1
+		specIconPicker:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+		specIconPicker:Refresh()
+		specIconPicker:Show()
+	end
+
+	local function OpenSpecEditMenu(tabButton, info)
+		local menu = {}
+		if not info.pet then
+			menu[#menu + 1] = {
+				text = "Activate Spec",
+				func = function()
+					if not InCombatLockdown() then
+						SetActiveTalentGroup(info.talentGroup)
+						Tabs_UpdateCheck(tabButton:GetParent(), Talented.alternates[info.talentGroup])
+					end
+				end,
+				disabled = InCombatLockdown() or tabButton:GetChecked()
+			}
+			menu[#menu + 1] = {
+				text = "Rename Spec...",
+				func = function()
+					local dialog = StaticPopup_Show("TALENTED_RENAME_SPEC")
+					if dialog then
+						dialog.data = info.talentGroup
+					end
+				end
+			}
+			menu[#menu + 1] = {
+				text = "",
+				disabled = true,
+				separator = true
+			}
+		end
+		menu[#menu + 1] = {
+			text = "Spec Icon",
+			isTitle = true,
+			notCheckable = true
+		}
+		for i, cache in ipairs(info.cache) do
+			local label = cache.name or ("Tree " .. tostring(i))
+			local iconPrefix = (cache.icon and cache.icon ~= "") and ("|T" .. cache.icon .. ":14|t ") or ""
+			menu[#menu + 1] = {
+				text = iconPrefix .. label,
+				checked = (info.primary == i),
+				func = function()
+					SetSpecIconSelection(info, i)
+				end
+			}
+		end
+		menu[#menu + 1] = {
+			text = "Reset Icon",
+			func = function()
+				SetSpecIconSelection(info, nil)
+				SetSpecIconPath(info, nil)
+			end
+		}
+		menu[#menu + 1] = {
+			text = "Choose Any Icon...",
+			func = function()
+				OpenAnySpecIconPicker(info)
+			end
+		}
+		EasyMenu(menu, Talented:GetDropdownFrame(tabButton))
+	end
+
 	local function TabFrame_OnClick(self, button)
 		local info = specs[self.type]
 		if button == "RightButton" then
-			if not info.pet and not InCombatLockdown() then
-				SetActiveTalentGroup(info.talentGroup)
-				Tabs_UpdateCheck(self:GetParent(), Talented.alternates[info.talentGroup])
-			end
+			OpenSpecEditMenu(self, info)
 		else
 			local template
 			if info.pet then
@@ -1932,7 +2208,15 @@ do
 	local function TabFrame_Update(self)
 		local info = UpdateSpecInfo(specs[self.type])
 		if info then
-			self.texture:SetTexture(info.cache[info.primary or 1].icon)
+			local profile = Talented.db and Talented.db.profile
+			local iconPathMap = profile and profile.specIconPaths
+			local iconKey = info.pet and "petspec1" or ("spec" .. tostring(info.talentGroup or 1))
+			local forcedIconPath = iconPathMap and iconPathMap[iconKey]
+			if type(forcedIconPath) == "string" and forcedIconPath ~= "" then
+				self.texture:SetTexture(forcedIconPath)
+			else
+				self.texture:SetTexture(info.cache[info.primary or 1].icon)
+			end
 		end
 	end
 

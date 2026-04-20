@@ -2303,15 +2303,20 @@ do
 		for talentGroup = 1, GetNumTalentGroups() do
 			local template = self.alternates[talentGroup]
 			local classChanged = template and template.class ~= class
+			local defaultGroupName = self:GetTalentGroupName(talentGroup)
 			if not template then
 				template = {
 					talentGroup = talentGroup,
-					name = self:GetTalentGroupName(talentGroup),
+					name = defaultGroupName,
+					autoName = defaultGroupName,
 					class = class
 				}
 			else
 				template.points = nil
-				template.name = self:GetTalentGroupName(talentGroup)
+				if not template.name or template.name == "" or template.name == template.autoName then
+					template.name = defaultGroupName
+				end
+				template.autoName = defaultGroupName
 				if classChanged then
 					for i = #template, 1, -1 do
 						template[i] = nil
@@ -2406,6 +2411,65 @@ function Talented:GetTalentGroupName(talentGroup)
 	else
 		return string.format("Spec %d", talentGroup)
 	end
+end
+
+function Talented:SetTalentGroupName(talentGroup, name)
+	if type(talentGroup) ~= "number" or talentGroup < 1 then
+		return false
+	end
+	local value = tostring(name or ""):gsub("^%s*(.-)%s*$", "%1")
+	if value == "" then
+		return self:ClearTalentGroupName(talentGroup)
+	end
+	if self.db and self.db.profile then
+		self.db.profile.specNames = self.db.profile.specNames or {}
+		self.db.profile.specNames[talentGroup] = value
+	end
+	if type(SetCustomGameDataString) == "function" then
+		pcall(SetCustomGameDataString, 21, talentGroup, value)
+	end
+	if self.alternates and self.alternates[talentGroup] then
+		local template = self.alternates[talentGroup]
+		template.name = value
+		template.autoName = value
+	end
+	self:UpdateView()
+	return true
+end
+
+function Talented:ClearTalentGroupName(talentGroup)
+	if type(talentGroup) ~= "number" or talentGroup < 1 then
+		return false
+	end
+	if self.db and self.db.profile and self.db.profile.specNames then
+		self.db.profile.specNames[talentGroup] = nil
+	end
+	if type(SetCustomGameDataString) == "function" then
+		pcall(SetCustomGameDataString, 21, talentGroup, "")
+	end
+	local fallback = nil
+	if type(GetCustomGameDataString) == "function" then
+		local serverName = GetCustomGameDataString(21, talentGroup)
+		if serverName and serverName ~= "" then
+			fallback = serverName
+		end
+	end
+	if not fallback then
+		if talentGroup == 1 then
+			fallback = TALENT_SPEC_PRIMARY
+		elseif talentGroup == 2 then
+			fallback = TALENT_SPEC_SECONDARY
+		else
+			fallback = string.format("Spec %d", talentGroup)
+		end
+	end
+	if self.alternates and self.alternates[talentGroup] then
+		local template = self.alternates[talentGroup]
+		template.name = fallback
+		template.autoName = fallback
+	end
+	self:UpdateView()
+	return true
 end
 -------------------------------------------------------------------------------
 -- view.lua
@@ -3808,8 +3872,11 @@ end
 
 do
 	local addonName = "SynastriaBuildManager"
-	local SBM = {}
-	_G[addonName] = SBM
+	local standaloneBuildManagerLoaded = type(IsAddOnLoaded) == "function" and IsAddOnLoaded(addonName) or false
+	local SBM = rawget(_G, addonName) or {}
+	if not standaloneBuildManagerLoaded then
+		_G[addonName] = SBM
+	end
 	local BUILD_VERSION = "SBM1"
 	local ActionTypes = {
 		CALL = "call",
@@ -4701,6 +4768,12 @@ do
 	end
 
 	function Talented:GetCommunitySuggestionName()
+		if self.template and self.template.talentGroup then
+			local specName = self:GetTalentGroupName(self.template.talentGroup)
+			if type(specName) == "string" and specName ~= "" then
+				return specName
+			end
+		end
 		local displayClass = select(1, UnitClass("player"))
 		if type(displayClass) == "string" and displayClass ~= "" then
 			return displayClass
@@ -5336,23 +5409,25 @@ do
 		return
 	end
 
-	_G.GetAllPerks = function()
-		return Talented:GetAllSynastriaPerks()
-	end
-
-	_G.SBM = SBM
-
-	_G.ExportDualClassTalents = function()
-		return Talented:ExportDualClassTalents()
-	end
-
-	_G.ImportDualClassTalents = function(importText)
-		ClearBuildQueue()
-		local ok = Talented:ImportDualClassTalents(importText)
-		if ok then
-			QueueBuildAction(ActionTypes.COMPLETE, {message = "Talent import queued."})
-			StartBuildQueue()
+	if not standaloneBuildManagerLoaded then
+		_G.GetAllPerks = function()
+			return Talented:GetAllSynastriaPerks()
 		end
-		return ok
+
+		_G.SBM = SBM
+
+		_G.ExportDualClassTalents = function()
+			return Talented:ExportDualClassTalents()
+		end
+
+		_G.ImportDualClassTalents = function(importText)
+			ClearBuildQueue()
+			local ok = Talented:ImportDualClassTalents(importText)
+			if ok then
+				QueueBuildAction(ActionTypes.COMPLETE, {message = "Talent import queued."})
+				StartBuildQueue()
+			end
+			return ok
+		end
 	end
 end
