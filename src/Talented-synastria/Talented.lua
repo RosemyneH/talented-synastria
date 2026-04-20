@@ -3,6 +3,1042 @@ _G.Talented = Talented
 
 local L = LibStub("AceLocale-3.0"):GetLocale("Talented")
 
+local CLASS_BY_ID = {
+	[1] = "WARRIOR",
+	[2] = "PALADIN",
+	[3] = "HUNTER",
+	[4] = "ROGUE",
+	[5] = "PRIEST",
+	[6] = "DEATHKNIGHT",
+	[7] = "SHAMAN",
+	[8] = "MAGE",
+	[9] = "WARLOCK",
+	[11] = "DRUID"
+}
+
+local CLASS_ID_BY_NAME = {}
+for classId, className in pairs(CLASS_BY_ID) do
+	CLASS_ID_BY_NAME[className] = classId
+end
+
+function Talented:GetClassIdByName(className)
+	return CLASS_ID_BY_NAME[className]
+end
+
+function Talented:GetCurrentClassFromTalentTabs()
+	if not self.tabdata then
+		return nil
+	end
+
+	local tabCount = GetNumTalentTabs()
+	if not tabCount or tabCount < 1 then
+		return nil
+	end
+
+	local candidates = {}
+	if type(CustomGetClassMask) == "function" then
+		local classMask = CustomGetClassMask() or 0
+		for classId = 1, 11 do
+			local className = CLASS_BY_ID[classId]
+			if className and bit.band(classMask, bit.lshift(1, classId - 1)) > 0 then
+				candidates[#candidates + 1] = className
+			end
+		end
+	end
+	if #candidates == 0 then
+		for classId = 1, 11 do
+			local className = CLASS_BY_ID[classId]
+			if className then
+				candidates[#candidates + 1] = className
+			end
+		end
+	end
+
+	local bestClass, bestScore
+	for _, className in ipairs(candidates) do
+		local classTabs = self.tabdata[className]
+		if classTabs and #classTabs >= tabCount then
+			local score = 0
+			for tab = 1, tabCount do
+				local liveName, _, _, liveBackground = GetTalentTabInfo(tab)
+				local expected = classTabs[tab]
+				if expected then
+					if liveBackground and expected.background and liveBackground == expected.background then
+						score = score + 3
+					end
+					if liveName and expected.name and liveName == expected.name then
+						score = score + 1
+					end
+				end
+			end
+			if score > 0 and (not bestScore or score > bestScore) then
+				bestClass, bestScore = className, score
+			end
+		end
+	end
+
+	return bestClass
+end
+
+function Talented:GetCurrentPlayerClass()
+	if self.manualPlayerClass and self.spelldata and self.spelldata[self.manualPlayerClass] then
+		return self.manualPlayerClass
+	end
+
+	local classFromTabs = self:GetCurrentClassFromTalentTabs()
+	if classFromTabs then
+		return classFromTabs
+	end
+
+	if type(CustomGetClassId) == "function" then
+		local classId = CustomGetClassId()
+		if classId and CLASS_BY_ID[classId] then
+			return CLASS_BY_ID[classId]
+		end
+	end
+
+	return select(2, UnitClass("player"))
+end
+
+function Talented:GetBasePlayerClass()
+	return select(2, UnitClass("player"))
+end
+
+function Talented:ClassTrace(s, ...)
+	return
+end
+
+function Talented:TraceTalentSnapshot(tag)
+	return
+end
+
+function Talented:SetManualPlayerClass(className)
+	if not className or not self.spelldata or not self.spelldata[className] then
+		self:ClassTrace("SetManualPlayerClass rejected class=%s", tostring(className))
+		return
+	end
+	self:ClassTrace("SetManualPlayerClass class=%s index=%s", className, tostring(self.manualClassIndex))
+	self.manualPlayerClass = className
+	if self:IsCustomTalentEnvironment() then
+		local nativeOk = self:EnsureNativeClassSelection()
+		local liveClass = self:GetCurrentClassFromTalentTabs()
+		if nativeOk or liveClass == className then
+			self:CaptureClassSpecsFromServer(className)
+		else
+			self:ClassTrace("SetManualPlayerClass capture skipped class=%s nativeOk=%s live=%s", className, tostring(nativeOk), tostring(liveClass))
+			if self:CaptureClassSpecsFromSpellbook(className) then
+				self:ClassTrace("SetManualPlayerClass used spellbook fallback class=%s", className)
+			end
+		end
+	end
+	self:UpdatePlayerSpecs()
+	if self.template and self.template.talentGroup then
+		self:SetTemplate(self:GetActiveSpec())
+	else
+		self:UpdateView()
+	end
+	if self.tabs then
+		self.tabs:Update()
+	end
+	self:UpdateClassSwitchButtons()
+	self:PLAYER_TALENT_UPDATE()
+end
+
+function Talented:GetManualClassIndex()
+	local classes = self:GetPlayerClasses()
+	if self.manualClassIndex and classes[self.manualClassIndex] then
+		return self.manualClassIndex
+	end
+	if self.manualClassIndex and classes[self.manualClassIndex] == self.manualPlayerClass then
+		return self.manualClassIndex
+	end
+	for i, className in ipairs(classes) do
+		if className == self.manualPlayerClass then
+			return i
+		end
+	end
+end
+
+function Talented:OpenNativeTalentFrame()
+	local opened = false
+	if not IsAddOnLoaded("Blizzard_TalentUI") then
+		pcall(LoadAddOn, "Blizzard_TalentUI")
+	end
+	if self.hooks and type(self.hooks.ToggleTalentFrame) == "function" and (not _G.PlayerTalentFrame or not _G.PlayerTalentFrame:IsShown()) then
+		pcall(self.hooks.ToggleTalentFrame)
+		opened = true
+	end
+	if _G.PlayerTalentFrame and not _G.PlayerTalentFrame:IsShown() then
+		ShowUIPanel(_G.PlayerTalentFrame)
+		opened = true
+	end
+	return opened
+end
+
+function Talented:BootstrapNativeClassButtons()
+	if self.nativeBootstrapDone or not self:IsCustomTalentEnvironment() then
+		return
+	end
+	self.nativeBootstrapDone = true
+
+	if not IsAddOnLoaded("Blizzard_TalentUI") then
+		pcall(LoadAddOn, "Blizzard_TalentUI")
+	end
+
+	self:PrimeNativeClassButtons(false)
+
+	if not self.nativeBootstrapFrame then
+		local f = CreateFrame("Frame")
+		f:Hide()
+		f:SetScript("OnUpdate", function(frame, elapsed)
+			frame.elapsed = (frame.elapsed or 0) + elapsed
+			if frame.elapsed < 0.4 then
+				return
+			end
+			frame:Hide()
+			frame.elapsed = 0
+
+			Talented:DiscoverNativeClassButtons()
+			Talented:HookClassSwitchButtons()
+			Talented:UpdateClassSwitchButtons()
+			Talented:ClassTrace("BootstrapNativeClassButtons finished; native1=%s native2=%s", tostring(Talented.nativeClassButtons and Talented.nativeClassButtons[1] and true or false), tostring(Talented.nativeClassButtons and Talented.nativeClassButtons[2] and true or false))
+		end)
+		self.nativeBootstrapFrame = f
+	end
+
+	self.nativeBootstrapFrame.elapsed = 0
+	self.nativeBootstrapFrame:Show()
+end
+
+function Talented:OnNativeTalentFrameShow()
+	self:DiscoverNativeClassButtons()
+	self:HookClassSwitchButtons()
+	self:UpdateClassSwitchButtons()
+end
+
+function Talented:PrimeNativeClassButtons(forceOpen)
+	if self.nativeButtonsPrimed then
+		return true
+	end
+
+	if not IsAddOnLoaded("Blizzard_TalentUI") then
+		pcall(LoadAddOn, "Blizzard_TalentUI")
+	end
+
+	local talentFrame = _G.PlayerTalentFrame
+	if not talentFrame then
+		return false
+	end
+
+	if not self.nativeTalentFrameShowHooked then
+		self:HookScript(talentFrame, "OnShow", "OnNativeTalentFrameShow")
+		self.nativeTalentFrameShowHooked = true
+	end
+
+	self:DiscoverNativeClassButtons()
+	if self.nativeClassButtons and self.nativeClassButtons[1] and self.nativeClassButtons[2] then
+		self.nativeButtonsPrimed = true
+		return true
+	end
+
+	if forceOpen then
+		local wasShown = talentFrame:IsShown()
+		if not wasShown then
+			ShowUIPanel(talentFrame)
+		end
+		self:DiscoverNativeClassButtons()
+		if self.nativeClassButtons and self.nativeClassButtons[1] and self.nativeClassButtons[2] then
+			self.nativeButtonsPrimed = true
+		end
+		if not wasShown and talentFrame:IsShown() then
+			HideUIPanel(talentFrame)
+		end
+	end
+	return false
+end
+
+function Talented:DiscoverNativeClassButtons()
+	self.nativeClassButtons = self.nativeClassButtons or {}
+
+	local knownNames = {
+		"PlayerClassTalentBtn1", "PlayerClassTalentBtn2",
+		"ClassTalentBtn1", "ClassTalentBtn2",
+		"ClassBtn1", "ClassBtn2"
+	}
+	for _, name in ipairs(knownNames) do
+		local obj = _G[name]
+		if obj then
+			local index = tonumber(name:match("(%d+)$"))
+			if index then
+				self.nativeClassButtons[index] = obj
+			end
+		end
+	end
+
+	if (not self.nativeClassButtons[1] or not self.nativeClassButtons[2]) and _G.PlayerTalentFrame and _G.PlayerTalentFrame.GetChildren then
+		for _, child in ipairs({_G.PlayerTalentFrame:GetChildren()}) do
+			local t = type(child)
+			if t == "table" or t == "userdata" then
+				local name = (type(child.GetName) == "function") and child:GetName() or nil
+				if type(name) == "string" then
+					local index = tonumber(name:match("PlayerClassTalentBtn(%d+)"))
+						or tonumber(name:match("ClassTalentBtn(%d+)"))
+						or tonumber(name:match("ClassBtn(%d+)"))
+					if index then
+						self.nativeClassButtons[index] = child
+					end
+				end
+			end
+		end
+	end
+end
+
+function Talented:GetNativeClassButton(index, allowTempShow)
+	if not _G["PlayerClassTalentBtn" .. tostring(index)] and not IsAddOnLoaded("Blizzard_TalentUI") then
+		pcall(LoadAddOn, "Blizzard_TalentUI")
+	end
+
+	local button = _G["PlayerClassTalentBtn" .. tostring(index)]
+	if not button then
+		self:PrimeNativeClassButtons(false)
+		self:DiscoverNativeClassButtons()
+		button = self.nativeClassButtons and self.nativeClassButtons[index]
+	end
+	local tempOpenedTalentFrame
+	if not button and allowTempShow then
+		tempOpenedTalentFrame = self:OpenNativeTalentFrame()
+		self:PrimeNativeClassButtons(false)
+		button = _G["PlayerClassTalentBtn" .. tostring(index)]
+		if not button then
+			self:DiscoverNativeClassButtons()
+			button = self.nativeClassButtons and self.nativeClassButtons[index]
+		end
+	end
+
+	return button, tempOpenedTalentFrame
+end
+
+function Talented:EnsureNativeClassSelection()
+	local index = self:GetManualClassIndex()
+	if not index then
+		self:ClassTrace("EnsureNativeClassSelection no manual index for class=%s", tostring(self.manualPlayerClass))
+		return false
+	end
+	local button, tempOpenedTalentFrame = self:GetNativeClassButton(index, true)
+	if button and button.Click then
+		self.suppressClassSwitchHook = true
+		pcall(button.Click, button)
+		self.suppressClassSwitchHook = nil
+		self:ClassTrace("EnsureNativeClassSelection clicked native button index=%d name=%s", index, tostring(button.GetName and button:GetName() or "unknown"))
+		if tempOpenedTalentFrame and _G.PlayerTalentFrame and _G.PlayerTalentFrame:IsShown() then
+			HideUIPanel(_G.PlayerTalentFrame)
+		end
+		return true
+	elseif button then
+		local onClick = button:GetScript("OnClick")
+		if onClick then
+			self.suppressClassSwitchHook = true
+			pcall(onClick, button, "LeftButton")
+			self.suppressClassSwitchHook = nil
+			self:ClassTrace("EnsureNativeClassSelection fired OnClick index=%d name=%s", index, tostring(button.GetName and button:GetName() or "unknown"))
+			if tempOpenedTalentFrame and _G.PlayerTalentFrame and _G.PlayerTalentFrame:IsShown() then
+				HideUIPanel(_G.PlayerTalentFrame)
+			end
+			return true
+		end
+	end
+	if tempOpenedTalentFrame and _G.PlayerTalentFrame and _G.PlayerTalentFrame:IsShown() then
+		HideUIPanel(_G.PlayerTalentFrame)
+	end
+	self:ClassTrace("EnsureNativeClassSelection failed index=%d", index)
+	return false
+end
+
+function Talented:TryServerClassSwitch(index, className, allowNativeSelection)
+	local switched = false
+	if allowNativeSelection ~= false then
+		switched = self:EnsureNativeClassSelection()
+	end
+	if switched then
+		return true
+	end
+
+	local classId = self:GetClassIdByName(className)
+	local candidates = {
+		"CustomSetActiveClass",
+		"CustomSetClass",
+		"CustomSwitchClass",
+		"CMCSetActiveClass",
+		"CMCSetClass",
+		"CMCSelectClass",
+		"SetCustomClass",
+		"SetPlayerClassIndex"
+	}
+
+	for _, fnName in ipairs(candidates) do
+		local fn = _G[fnName]
+		if type(fn) == "function" then
+			if pcall(fn, index) then
+				self:ClassTrace("TryServerClassSwitch used %s(%d)", fnName, index)
+				return true
+			end
+			if classId and pcall(fn, classId) then
+				self:ClassTrace("TryServerClassSwitch used %s(%d classId)", fnName, classId)
+				return true
+			end
+			if className and pcall(fn, className) then
+				self:ClassTrace("TryServerClassSwitch used %s(%s className)", fnName, className)
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+function Talented:RunNativeClassSync(options)
+	options = options or {}
+	local quiet = options.quiet and true or false
+	local allowNativeSelection = options.allowNativeSelection
+	if allowNativeSelection == nil then
+		allowNativeSelection = true
+	end
+
+	if not self:IsCustomTalentEnvironment() then
+		if not quiet then
+			self:Print("Class sync is only needed in custom multiclass mode.")
+		end
+		return
+	end
+
+	local classes = self:GetPlayerClasses()
+	if #classes < 2 then
+		if not quiet then
+			self:Print("Class sync skipped: less than 2 classes detected.")
+		end
+		return
+	end
+
+	if not IsAddOnLoaded("Blizzard_TalentUI") then
+		pcall(LoadAddOn, "Blizzard_TalentUI")
+	end
+
+	local talentFrame = _G.PlayerTalentFrame
+	if allowNativeSelection and not talentFrame then
+		if not quiet then
+			self:Print("Class sync failed: Blizzard talent frame not available.")
+		end
+		return
+	end
+
+	local restore = {
+		manualClassIndex = self.manualClassIndex,
+		manualPlayerClass = self.manualPlayerClass,
+		wasShown = talentFrame and talentFrame:IsShown() or false
+	}
+
+	if allowNativeSelection and talentFrame and not restore.wasShown then
+		ShowUIPanel(talentFrame)
+	end
+
+	if not self.nativeClassSyncFrame then
+		local f = CreateFrame("Frame")
+		f:Hide()
+		f:SetScript("OnUpdate", function(frame, elapsed)
+			frame.elapsed = (frame.elapsed or 0) + elapsed
+			if frame.elapsed < 0.25 then
+				return
+			end
+			frame.elapsed = 0
+
+			local idx = frame.step
+			if idx > #frame.classes then
+				frame:Hide()
+				local state = frame.restoreState
+				if state then
+					if state.manualClassIndex and state.manualPlayerClass then
+						Talented:TryServerClassSwitch(state.manualClassIndex, state.manualPlayerClass, frame.allowNativeSelection)
+					end
+					Talented.manualClassIndex = state.manualClassIndex
+					Talented.manualPlayerClass = state.manualPlayerClass
+					if frame.allowNativeSelection and not state.wasShown and _G.PlayerTalentFrame and _G.PlayerTalentFrame:IsShown() then
+						HideUIPanel(_G.PlayerTalentFrame)
+					end
+				end
+				Talented:UpdatePlayerSpecs()
+				Talented:UpdateView()
+				Talented:UpdateClassSwitchButtons()
+				if not frame.quiet then
+					Talented:Print("Class sync complete.")
+				end
+				if type(frame.onComplete) == "function" then
+					pcall(frame.onComplete)
+				end
+				return
+			end
+
+			local className = frame.classes[idx]
+			Talented.manualClassIndex = idx
+			Talented.manualPlayerClass = className
+
+			frame.phase = frame.phase or "switch"
+			if frame.phase == "switch" then
+				frame.switched = Talented:TryServerClassSwitch(idx, className, frame.allowNativeSelection)
+				frame.waitTries = 0
+				frame.phase = "wait"
+				Talented:ClassTrace("ClassSync switch step=%d class=%s switched=%s", idx, className, tostring(frame.switched))
+				return
+			end
+
+			if frame.phase == "wait" then
+				local liveClass = Talented:GetCurrentClassFromTalentTabs()
+				if liveClass == className then
+					Talented:CaptureClassSpecsFromServer(className)
+					Talented:ClassTrace("ClassSync captured from server step=%d class=%s", idx, className)
+					frame.phase = "switch"
+					frame.step = idx + 1
+					return
+				end
+
+				frame.waitTries = (frame.waitTries or 0) + 1
+				if frame.waitTries % 3 == 0 then
+					Talented:TryServerClassSwitch(idx, className, frame.allowNativeSelection)
+				end
+				if frame.waitTries >= 12 then
+					Talented:CaptureClassSpecsFromSpellbook(className)
+					Talented:ClassTrace("ClassSync fallback spellbook step=%d class=%s live=%s", idx, className, tostring(liveClass))
+					frame.phase = "switch"
+					frame.step = idx + 1
+				end
+			end
+		end)
+		self.nativeClassSyncFrame = f
+	end
+
+	self.nativeClassSyncFrame.classes = classes
+	self.nativeClassSyncFrame.step = 1
+	self.nativeClassSyncFrame.elapsed = 0
+	self.nativeClassSyncFrame.phase = "switch"
+	self.nativeClassSyncFrame.waitTries = 0
+	self.nativeClassSyncFrame.restoreState = restore
+	self.nativeClassSyncFrame.quiet = quiet
+	self.nativeClassSyncFrame.allowNativeSelection = allowNativeSelection
+	self.nativeClassSyncFrame.onComplete = options.onComplete
+	self.nativeClassSyncFrame:Show()
+	if not quiet then
+		self:Print("Class sync started...")
+	end
+end
+
+function Talented:ScheduleInitialClassSync()
+	if not self:IsCustomTalentEnvironment() or self.initialClassSyncScheduled or self.initialClassSyncDone then
+		return
+	end
+	local classes = self:GetPlayerClasses()
+	if #classes < 2 then
+		self.initialClassSyncDone = true
+		return
+	end
+	self.initialClassSyncScheduled = true
+	if not self.initialClassSyncFrame then
+		local f = CreateFrame("Frame")
+		f:Hide()
+		f:SetScript("OnUpdate", function(frame, elapsed)
+			frame.elapsed = (frame.elapsed or 0) + elapsed
+			if frame.elapsed < 1.0 then
+				return
+			end
+			frame:Hide()
+			frame.elapsed = 0
+			Talented:RunNativeClassSync({
+				quiet = true,
+				allowNativeSelection = false,
+				onComplete = function()
+					Talented.initialClassSyncDone = true
+				end
+			})
+		end)
+		self.initialClassSyncFrame = f
+	end
+	self.initialClassSyncFrame.elapsed = 0
+	self.initialClassSyncFrame:Show()
+end
+
+function Talented:CaptureClassSpecsFromServer(className)
+	if not className or not self.spelldata or not self.spelldata[className] then
+		self:ClassTrace("CaptureClassSpecsFromServer rejected class=%s", tostring(className))
+		return
+	end
+	if GetNumTalentTabs() == 0 then
+		self:ClassTrace("CaptureClassSpecsFromServer skipped class=%s reason=no_tabs", className)
+		return
+	end
+	local liveClass = self:GetCurrentClassFromTalentTabs()
+	if liveClass and liveClass ~= className then
+		self:ClassTrace("CaptureClassSpecsFromServer skipped class=%s reason=live_class_%s", className, liveClass)
+		return
+	end
+
+	local info = self:UncompressSpellData(className)
+	self.multiClassCache = self.multiClassCache or {}
+	local classCache = self.multiClassCache[className] or {}
+	for talentGroup = 1, GetNumTalentGroups() do
+		local specCache = classCache[talentGroup] or {}
+		local tabTotals = {}
+		for tab, tree in ipairs(info) do
+			local cacheTab = specCache[tab] or {}
+			local tabTotal = 0
+			for index = 1, #tree do
+				local rank = select(5, GetTalentInfo(tab, index, nil, nil, talentGroup)) or 0
+				cacheTab[index] = rank
+				tabTotal = tabTotal + rank
+			end
+			specCache[tab] = cacheTab
+			tabTotals[#tabTotals + 1] = tostring(tabTotal)
+		end
+		classCache[talentGroup] = specCache
+		self:ClassTrace("Captured class=%s spec=%d tabs=%s", className, talentGroup, table.concat(tabTotals, "/"))
+	end
+	self.multiClassCache[className] = classCache
+end
+
+function Talented:GetKnownPlayerSpellIds()
+	local known = {}
+	local tabs = (GetNumSpellTabs and GetNumSpellTabs()) or 0
+	for tab = 1, tabs do
+		local _, _, offset, numSpells = GetSpellTabInfo(tab)
+		for i = 1, (numSpells or 0) do
+			local spellBookIndex = (offset or 0) + i
+			local spellId
+			if type(GetSpellBookItemInfo) == "function" then
+				local spellType, resolvedSpellId = GetSpellBookItemInfo(spellBookIndex, BOOKTYPE_SPELL or "spell")
+				if spellType == "SPELL" and resolvedSpellId then
+					spellId = resolvedSpellId
+				end
+			end
+			if not spellId and type(GetSpellLink) == "function" then
+				local link = GetSpellLink(spellBookIndex, BOOKTYPE_SPELL or "spell")
+				if type(link) == "string" then
+					spellId = tonumber(link:match("spell:(%d+)"))
+				end
+			end
+			if spellId then
+				known[spellId] = true
+			end
+		end
+	end
+	return known
+end
+
+function Talented:CaptureClassSpecsFromSpellbook(className)
+	if not className or not self.spelldata or not self.spelldata[className] then
+		return false
+	end
+	local info = self:UncompressSpellData(className)
+	if not info then
+		return false
+	end
+
+	local known = self:GetKnownPlayerSpellIds()
+	self.multiClassCache = self.multiClassCache or {}
+	local classCache = self.multiClassCache[className] or {}
+	local capturedAny = false
+
+	for talentGroup = 1, GetNumTalentGroups() do
+		local specCache = classCache[talentGroup] or {}
+		local tabTotals = {}
+		for tab, tree in ipairs(info) do
+			local cacheTab = specCache[tab] or {}
+			local tabTotal = 0
+			for index, talent in ipairs(tree) do
+				local rankValue = 0
+				if talent and talent.ranks then
+					for rankIdx = #talent.ranks, 1, -1 do
+						local spellId = talent.ranks[rankIdx]
+						if spellId and known[spellId] then
+							rankValue = rankIdx
+							break
+						end
+					end
+				end
+				cacheTab[index] = rankValue
+				tabTotal = tabTotal + rankValue
+			end
+			specCache[tab] = cacheTab
+			tabTotals[#tabTotals + 1] = tostring(tabTotal)
+			if tabTotal > 0 then
+				capturedAny = true
+			end
+		end
+		classCache[talentGroup] = specCache
+		self:ClassTrace("SpellbookCapture class=%s spec=%d tabs=%s", className, talentGroup, table.concat(tabTotals, "/"))
+	end
+	self.multiClassCache[className] = classCache
+	return capturedAny
+end
+
+function Talented:GetPlayerClasses()
+	if type(CustomGetClassMask) == "function" then
+		local classes = {}
+		local classMask = CustomGetClassMask() or 0
+		for classId = 1, 11 do
+			local className = CLASS_BY_ID[classId]
+			if className and bit.band(classMask, bit.lshift(1, classId - 1)) > 0 then
+				classes[#classes + 1] = className
+			end
+		end
+		if #classes > 0 then
+			return classes
+		end
+	end
+
+	return {self:GetCurrentPlayerClass()}
+end
+
+function Talented:IsPlayerClass(className)
+	if not className then
+		return false
+	end
+
+	if type(CustomIsClassMask) == "function" then
+		local classId = CLASS_ID_BY_NAME[className]
+		if classId then
+			local ok, result = pcall(CustomIsClassMask, bit.lshift(1, classId - 1))
+			if ok and result then
+				return true
+			end
+		end
+	end
+
+	for _, playerClass in ipairs(self:GetPlayerClasses()) do
+		if playerClass == className then
+			return true
+		end
+	end
+
+	return false
+end
+
+function Talented:GetCommunityBuildsForClass(className)
+	self.communityBuildCatalog = self.communityBuildCatalog or {}
+	self.communityBuildCatalog.WITCH = self.communityBuildCatalog.WITCH or {}
+
+	local function ensureBuild(list, build)
+		for i = 1, #list do
+			if type(list[i]) == "table" and list[i].url == build.url then
+				return
+			end
+		end
+		list[#list + 1] = build
+	end
+
+	ensureBuild(self.communityBuildCatalog.WITCH, {
+		name = "Lulleh's Witch - Soullink Regen Build",
+		url = "WARLOCK,pZAoDmbrAF3aZ53mfC0nr,DRUID,0Fm30Dpa0AZtood3A13wa30bZA,PERKS,P27711W1B2J1424Lo3kLT1b2_3p9Y31141B1312",
+		category = "Hellfire",
+		subcategory = "Lulleh",
+		baseClass = "WITCH",
+		classes = "WARLOCK,DRUID"
+	})
+	ensureBuild(self.communityBuildCatalog.WITCH, {
+		name = "Witch",
+		description = "Burn em foes",
+		category = "Hellfire",
+		subcategory = "Qt",
+		icon = "Interface\\Icons\\ABILITY_MAGE_MOLTENARMOR",
+		url = "SUB2,\"Witch\",\"Burn em foes\",\"Hellfire\",\"Author\",\"Interface\\Icons\\ABILITY_MAGE_MOLTENARMOR\",\"WARLOCK,pZAoDmbrAF3aZ53mfC0nr,DRUID,0000000aZ000a,PERKS,P27711W1B2J1424Lo3kLT1b2_3p9Y31141B1312\"",
+		baseClass = "WITCH",
+		classes = "WARLOCK,DRUID"
+	})
+
+	self.communityBuildCatalog[className] = self.communityBuildCatalog[className] or {}
+	return self.communityBuildCatalog[className]
+end
+
+do
+	local function NormalizeCommunityBuild(raw, keyHint)
+		if type(raw) == "table" then
+			local name = raw.name or raw.title or raw.label or raw[1] or keyHint
+			local url = raw.url or raw.payload or raw.code or raw[2]
+			if type(name) == "string" and type(url) == "string" and name ~= "" and url ~= "" then
+				local build = {}
+				for k, v in pairs(raw) do
+					build[k] = v
+				end
+				build.name = name
+				build.url = url
+				return build
+			end
+			return nil
+		end
+		if type(raw) == "string" and raw ~= "" and type(keyHint) == "string" and keyHint ~= "" then
+			return {
+				name = keyHint,
+				url = raw
+			}
+		end
+		return nil
+	end
+
+	local function BuildMatchesCurrentClassMask(self, build, className)
+		if type(build) ~= "table" then
+			return false
+		end
+
+		local classMask = (type(CustomGetClassMask) == "function") and (CustomGetClassMask() or 0) or nil
+		local currentClasses = {}
+		for _, name in ipairs(self:GetPlayerClasses()) do
+			currentClasses[name] = true
+		end
+
+		if type(build.classMask) == "number" and classMask then
+			-- Require all bits in build.classMask to be present in player classMask.
+			if bit.band(classMask, build.classMask) == build.classMask then
+				return true
+			end
+		end
+
+		-- Custom servers can expose a broad base class (e.g. "Witch") while
+		-- talents are split into multiple class trees. Allow those builds globally.
+		local baseLocalized, baseToken = UnitClass("player")
+		if (baseLocalized and baseLocalized:upper() == "WITCH") or (baseToken and baseToken:upper() == "WITCH") then
+			if type(build.baseClass) == "string" and build.baseClass:upper() == "WITCH" then
+				return true
+			end
+			if type(build.url) == "string" and build.url:find(",PERKS,", 1, true) then
+				return true
+			end
+		end
+
+		if type(build.classes) == "string" and build.classes ~= "" then
+			local required = {}
+			for token in build.classes:gmatch("[^,%s;|]+") do
+				required[#required + 1] = token:upper()
+			end
+			if #required > 0 then
+				local allPresent = true
+				for _, req in ipairs(required) do
+					if not currentClasses[req] then
+						allPresent = false
+						break
+					end
+				end
+				if allPresent then
+					return true
+				end
+			end
+		end
+
+		if type(build.class1) == "string" and type(build.class2) == "string" then
+			local c1, c2 = build.class1:upper(), build.class2:upper()
+			if currentClasses[c1] and currentClasses[c2] then
+				return true
+			end
+		end
+
+		if type(build.class) == "string" then
+			local oneClass = build.class:upper()
+			if currentClasses[oneClass] then
+				return true
+			end
+		end
+
+		return className and currentClasses[className] or false
+	end
+
+	function Talented:GetCommunityBuildsForCurrentMask(className)
+		self.communityBuildCatalog = self.communityBuildCatalog or {}
+		local output = {}
+		local seen = {}
+
+		local function addBuild(build)
+			if type(build) ~= "table" then
+				return
+			end
+			if not BuildMatchesCurrentClassMask(self, build, className) then
+				return
+			end
+			local key = tostring(build.name or "") .. "||" .. tostring(build.url or "")
+			if seen[key] then
+				return
+			end
+			seen[key] = true
+			output[#output + 1] = build
+		end
+
+		local function collectBuildsFromContainer(container)
+			if type(container) ~= "table" then
+				return
+			end
+			local hasArray = (#container > 0)
+			if hasArray then
+				for _, raw in ipairs(container) do
+					addBuild(NormalizeCommunityBuild(raw))
+				end
+			end
+			for key, raw in pairs(container) do
+				if type(key) ~= "number" then
+					addBuild(NormalizeCommunityBuild(raw, key))
+				end
+			end
+		end
+
+		collectBuildsFromContainer(self:GetCommunityBuildsForClass(className))
+
+		for key, builds in pairs(self.communityBuildCatalog) do
+			if key ~= className then
+				collectBuildsFromContainer(builds)
+			end
+		end
+
+		return output
+	end
+end
+
+function Talented:IsCustomTalentEnvironment()
+	if type(CMCGetMultiClassEnabled) == "function" and (CMCGetMultiClassEnabled() or 1) == 2 then
+		return true
+	end
+	if type(CustomGetClassMask) == "function" or type(CustomGetClassId) == "function" then
+		return true
+	end
+	return false
+end
+
+function Talented:HookClassSwitchButtons()
+	if self.classSwitchButtonsHooked then
+		return true
+	end
+
+	local button1 = _G.PlayerClassTalentBtn1
+	local button2 = _G.PlayerClassTalentBtn2
+	if not button1 or not button2 then
+		return false
+	end
+
+	self:HookScript(button1, "OnClick", "OnClassSwitchButtonClicked")
+	self:HookScript(button2, "OnClick", "OnClassSwitchButtonClicked")
+	self.classSwitchButtonsHooked = true
+	return true
+end
+
+function Talented:SwitchPlayerClassButton(index)
+	local classes = self:GetPlayerClasses()
+	local className = classes[index]
+	self.manualClassIndex = index
+	self:ClassTrace("SwitchPlayerClassButton index=%d class=%s", index, tostring(className))
+	local switchedNative = self:EnsureNativeClassSelection()
+	if className then
+		self:SetManualPlayerClass(className)
+	end
+	if not switchedNative then
+		self:ClassTrace("SwitchPlayerClassButton no native button index=%d", index)
+		self:OnClassSwitchButtonClicked()
+	end
+end
+
+function Talented:UpdateClassSwitchButtons()
+	local base = self.base
+	if not base or not base.bclass1 or not base.bclass2 then
+		return
+	end
+
+	local enabled = self:IsCustomTalentEnvironment()
+	local classes = self:GetPlayerClasses()
+	if not enabled or #classes < 2 then
+		base.bclass1:Hide()
+		base.bclass2:Hide()
+		return
+	end
+
+	local localized = _G.LOCALIZED_CLASS_NAMES_MALE or {}
+	local activeClass = self:GetCurrentPlayerClass()
+	local class1 = classes[1]
+	local class2 = classes[2]
+
+	if base.bclass1.SetClassToken then
+		base.bclass1:SetClassToken(class1)
+	else
+		base.bclass1:SetText(localized[class1] or class1 or "Class 1")
+		base.bclass1:SetSize(math.max(90, base.bclass1:GetTextWidth() + 20), 22)
+	end
+	if base.bclass2.SetClassToken then
+		base.bclass2:SetClassToken(class2)
+	else
+		base.bclass2:SetText(localized[class2] or class2 or "Class 2")
+		base.bclass2:SetSize(math.max(90, base.bclass2:GetTextWidth() + 20), 22)
+	end
+	base.bclass1:Show()
+	base.bclass2:Show()
+
+	if activeClass == class1 then
+		if base.bclass1.SetChecked then
+			base.bclass1:SetChecked(true)
+			base.bclass2:SetChecked(false)
+		else
+			base.bclass1:SetButtonState("PUSHED", 1)
+			base.bclass2:SetButtonState("NORMAL")
+		end
+	elseif activeClass == class2 then
+		if base.bclass1.SetChecked then
+			base.bclass1:SetChecked(false)
+			base.bclass2:SetChecked(true)
+		else
+			base.bclass2:SetButtonState("PUSHED", 1)
+			base.bclass1:SetButtonState("NORMAL")
+		end
+	else
+		if base.bclass1.SetChecked then
+			base.bclass1:SetChecked(false)
+			base.bclass2:SetChecked(false)
+		else
+			base.bclass1:SetButtonState("NORMAL")
+			base.bclass2:SetButtonState("NORMAL")
+		end
+	end
+end
+
+function Talented:OnClassSwitchButtonClicked()
+		if self.suppressClassSwitchHook then
+			self:ClassTrace("OnClassSwitchButtonClicked suppressed")
+			return
+		end
+		self:ClassTrace("OnClassSwitchButtonClicked class=%s live=%s", tostring(self:GetCurrentPlayerClass()), tostring(self:GetCurrentClassFromTalentTabs()))
+		-- Class swap state can lag behind button click by a frame on custom servers.
+		-- Refresh immediately and once again on the next frame.
+		self:UpdatePlayerSpecs()
+		if self.template and self.template.talentGroup then
+			self:SetTemplate(self:GetActiveSpec())
+		else
+			self:UpdateView()
+		end
+		if self.tabs then
+			self.tabs:Update()
+		end
+		self:UpdateClassSwitchButtons()
+
+		if not self.classSwitchRefreshFrame then
+			local f = CreateFrame("Frame")
+			f:Hide()
+			f:SetScript("OnUpdate", function(frame)
+				frame:Hide()
+				Talented:UpdatePlayerSpecs()
+				Talented:CaptureClassSpecsFromServer(Talented:GetCurrentPlayerClass())
+				if Talented.template and Talented.template.talentGroup then
+					Talented:SetTemplate(Talented:GetActiveSpec())
+				else
+					Talented:UpdateView()
+				end
+				if Talented.tabs then
+					Talented.tabs:Update()
+				end
+				Talented:UpdateClassSwitchButtons()
+			end)
+			self.classSwitchRefreshFrame = f
+		end
+		self.classSwitchRefreshFrame:Show()
+end
+
 -------------------------------------------------------------------------------
 -- core.lua
 --
@@ -42,7 +1078,7 @@ do
 
 		if
 			not self:ValidateTemplate(target) or
-				(RAID_CLASS_COLORS[target.class] and target.class ~= select(2, UnitClass "player")) or
+				(RAID_CLASS_COLORS[target.class] and not self:IsPlayerClass(target.class)) or
 				(not RAID_CLASS_COLORS[target.class] and (not self.GetPetClass or target.class ~= self:GetPetClass()))
 		 then
 			self.db.char.targets[targetName] = nil
@@ -105,6 +1141,7 @@ do
 				if not self.base or not self.base.perkTab then
 					self:AddPerksToFrame(self.base)
 				end
+				self:HookClassSwitchButtons()
 			end)
 		else
 			self:RegisterEvent("ADDON_LOADED")
@@ -121,6 +1158,7 @@ do
 				if not self.base or not self.base.perkTab then
 					self:AddPerksToFrame(self.base)
 				end
+				self:HookClassSwitchButtons()
 			end)
 		end
 	end
@@ -129,6 +1167,12 @@ do
 		if not input or input:trim() == "" then
 			self:OpenOptionsFrame()
 		else
+			local cmd, arg = input:match("^(%S+)%s*(.-)$")
+			cmd = cmd and cmd:lower()
+			if cmd == "classsync" then
+				self:RunNativeClassSync()
+				return
+			end
 			LibStub("AceConfigCmd-3.0").HandleCommand(self, "talented", "Talented", input)
 		end
 	end
@@ -197,7 +1241,7 @@ do
 		end
 
 		function Talented:CreateEmptyTemplate(class)
-			class = class or select(2, UnitClass "player")
+			class = class or self:GetCurrentPlayerClass()
 			local template = new(self.db.global.templates, L["Empty"], class)
 
 			local info = self:UncompressSpellData(class)
@@ -299,6 +1343,7 @@ do
 		self:RegisterEvent("CONFIRM_TALENT_WIPE")
 		self:RegisterEvent("CHARACTER_POINTS_CHANGED")
 		self:RegisterEvent("PLAYER_TALENT_UPDATE")
+		self:RegisterEvent("CHAT_MSG_ADDON")
 		TalentMicroButton:SetScript("OnClick", ToggleTalentFrame)
 	end
 
@@ -310,6 +1355,11 @@ do
 
 	function Talented:PLAYER_ENTERING_WORLD()
 		-- Update player specs and perk menu
+		if self:IsCustomTalentEnvironment() then
+			self:BootstrapNativeClassButtons()
+			self:PrimeNativeClassButtons(false)
+			self:ScheduleInitialClassSync()
+		end
 		self:UpdatePlayerSpecs()
 		if self.base and self.base.perkTab then
 			self:AddPerksToFrame(self.base)
@@ -317,6 +1367,8 @@ do
 	end
 
 	function Talented:PLAYER_TALENT_UPDATE()
+		self:ClassTrace("Event PLAYER_TALENT_UPDATE class=%s base=%s live=%s activeSpec=%s", tostring(self:GetCurrentPlayerClass()), tostring(self:GetBasePlayerClass()), tostring(self:GetCurrentClassFromTalentTabs()), tostring(GetActiveTalentGroup()))
+		self:TraceTalentSnapshot("TalentEvent PLAYER_TALENT_UPDATE")
 		self:UpdatePlayerSpecs()
 	end
 
@@ -335,11 +1387,17 @@ do
 	end
 
 	function Talented:CHARACTER_POINTS_CHANGED()
+		self:ClassTrace("Event CHARACTER_POINTS_CHANGED class=%s base=%s live=%s activeSpec=%s", tostring(self:GetCurrentPlayerClass()), tostring(self:GetBasePlayerClass()), tostring(self:GetCurrentClassFromTalentTabs()), tostring(GetActiveTalentGroup()))
+		self:TraceTalentSnapshot("TalentEvent CHARACTER_POINTS_CHANGED")
 		self:UpdatePlayerSpecs()
 		self:UpdateView()
 		if self.mode == "apply" then
 			self:CheckTalentPointsApplied()
 		end
+	end
+
+	function Talented:CHAT_MSG_ADDON(_, prefix, message, distribution, sender)
+		return
 	end
 
 	function Talented:UpdateMicroButtons()
@@ -522,7 +1580,7 @@ do
 		self:Debug("UNCOMPRESS CLASSDATA", class)
 		data = handle_tabs(strsplit("|", data))
 		self.spelldata[class] = data
-		if class == select(2, UnitClass("player")) then
+		if class == self:GetCurrentPlayerClass() and self.CheckSpellData then
 			self:CheckSpellData(class)
 		end
 		return data
@@ -654,6 +1712,16 @@ end
 
 do
 	local function DisableTalented(s, ...)
+		if _G.Talented and _G.Talented.IsCustomTalentEnvironment and _G.Talented:IsCustomTalentEnvironment() then
+			if s:find("%", nil, true) then
+				s = s:format(...)
+			end
+			if not _G.Talented.customValidationWarned then
+				_G.Talented:Print("Skipping strict talent validation in custom multi-class mode: %s", s)
+				_G.Talented.customValidationWarned = true
+			end
+			return
+		end
 		if _G.TalentedFrame then
 			_G.TalentedFrame:Hide()
 		end
@@ -680,7 +1748,7 @@ do
 		local spelldata, tabdata = self.spelldata[class], self.tabdata[class]
 		local invalid
 		if #spelldata > GetNumTalentTabs() then
-			print("too many tabs", #spelldata, GetNumTalentTabs())
+			self:Debug("[SpellData] too many tabs: %d > %d", #spelldata, GetNumTalentTabs())
 			invalid = true
 			for i = #spelldata, GetNumTalentTabs() + 1, -1 do
 				spelldata[i] = nil
@@ -689,7 +1757,7 @@ do
 		for tab = 1, GetNumTalentTabs() do
 			local talents = spelldata[tab]
 			if not talents then
-				print("missing talents for tab", tab)
+				self:Debug("[SpellData] missing talents for tab %d", tab)
 				invalid = true
 				talents = {}
 				spelldata[tab] = talents
@@ -698,7 +1766,7 @@ do
 			tabdata[tab].name = tabname -- no need to mark invalid for these
 			tabdata[tab].background = background
 			if #talents > GetNumTalents(tab) then
-				print("too many talents for tab", tab)
+				self:Debug("[SpellData] too many talents for tab %d", tab)
 				invalid = true
 				for i = #talents, GetNumTalents(tab) + 1, -1 do
 					talents[i] = nil
@@ -712,7 +1780,7 @@ do
 				local name, icon, row, column, _, ranks = GetTalentInfo(tab, index)
 				if not name then
 					if not talent.inactive then
-						print("inactive talent", class, tab, index)
+						self:Debug("[SpellData] inactive talent %s:%d:%d", class, tab, index)
 						talent.inactive = true
 						invalid = true
 					end
@@ -729,15 +1797,15 @@ do
 					end
 					if not found then
 						local s, n = pcall(GetSpellInfo, talent.ranks[1])
-						return DisableTalented("%s:%d:%d MISMATCHED %d ~= %s", class, tab, index, n or "unknown talent-" .. talent.ranks[1], name)
+						return DisableTalented("%s:%d:%d MISMATCHED %s ~= %s", class, tab, index, n or "unknown talent-" .. talent.ranks[1], name)
 					end
 					if row ~= talent.row then
-						print("invalid row for talent", tab, index, row, talent.row)
+						self:Debug("[SpellData] invalid row tab=%d index=%d live=%s cached=%s", tab, index, tostring(row), tostring(talent.row))
 						invalid = true
 						talent.row = row
 					end
 					if column ~= talent.column then
-						print("invalid column for talent", tab, index, column, talent.column)
+						self:Debug("[SpellData] invalid column tab=%d index=%d live=%s cached=%s", tab, index, tostring(column), tostring(talent.column))
 						invalid = true
 						talent.column = column
 					end
@@ -746,26 +1814,26 @@ do
 					end
 					if ranks < #talent.ranks then
 						invalid = true
-						print("too many ranks for talent", tab, index, ranks, talent.ranks)
+						self:Debug("[SpellData] too many ranks tab=%d index=%d live=%d cached=%d", tab, index, ranks, #talent.ranks)
 						for i = #talent.ranks, ranks + 1, -1 do
 							talent.ranks[i] = nil
 						end
 					end
 					local req_row, req_column, _, _, req2 = GetTalentPrereqs(tab, index)
 					if req2 then
-						print("too many reqs for talent", tab, index, req2)
+						self:Debug("[SpellData] too many reqs tab=%d index=%d req2=%s", tab, index, tostring(req2))
 						invalid = true
 					end
 					if not req_row then
 						if talent.req then
-							print("too many req for talent", tab, index)
+							self:Debug("[SpellData] stale req tab=%d index=%d", tab, index)
 							invalid = true
 							talent.req = nil
 						end
 					else
 						local req = talents[talent.req]
 						if not req or req.row ~= req_row or req.column ~= req_column then
-							print("invalid req for talent", tab, index, req and req.row, req_row, req and req.column, req_column)
+							self:Debug("[SpellData] invalid req tab=%d index=%d cachedRow=%s liveRow=%s cachedCol=%s liveCol=%s", tab, index, tostring(req and req.row), tostring(req_row), tostring(req and req.column), tostring(req_column))
 							invalid = true
 							-- it requires another pass to get the right talent.
 							talent.req = 0
@@ -1112,13 +2180,42 @@ do
 
 	function Talented:UpdatePlayerSpecs()
 		if GetNumTalentTabs() == 0 then return end
-		local class = select(2, UnitClass "player")
+		self:HookClassSwitchButtons()
+		if self:IsCustomTalentEnvironment() and not self.manualPlayerClass then
+			self.manualPlayerClass = self:GetBasePlayerClass()
+			local classes = self:GetPlayerClasses()
+			for i, className in ipairs(classes) do
+				if className == self.manualPlayerClass then
+					self.manualClassIndex = i
+					break
+				end
+			end
+			self:ClassTrace("Initialized manual class to base=%s index=%s", tostring(self.manualPlayerClass), tostring(self.manualClassIndex))
+		end
+		local class = self:GetCurrentPlayerClass()
+		local baseClass = self:GetBasePlayerClass()
+		local liveClass = self:GetCurrentClassFromTalentTabs()
+		local customEnv = self:IsCustomTalentEnvironment()
+		local shouldReadLive = (class == liveClass) or ((not liveClass) and class == baseClass)
+		self:ClassTrace("UpdatePlayerSpecs class=%s base=%s live=%s manual=%s source=%s", tostring(class), tostring(baseClass), tostring(liveClass), tostring(self.manualPlayerClass), shouldReadLive and "live" or "cache")
+		if liveClass and class == liveClass then
+			self:CaptureClassSpecsFromServer(class)
+		end
 		local info = self:UncompressSpellData(class)
+		if not self.multiClassCache then
+			self.multiClassCache = {}
+		end
+		local classCache = self.multiClassCache[class]
+		if not classCache then
+			classCache = {}
+			self.multiClassCache[class] = classCache
+		end
 		if not self.alternates then
 			self.alternates = {}
 		end
 		for talentGroup = 1, GetNumTalentGroups() do
 			local template = self.alternates[talentGroup]
+			local classChanged = template and template.class ~= class
 			if not template then
 				template = {
 					talentGroup = talentGroup,
@@ -1127,17 +2224,54 @@ do
 				}
 			else
 				template.points = nil
+				template.name = self:GetTalentGroupName(talentGroup)
+				if classChanged then
+					for i = #template, 1, -1 do
+						template[i] = nil
+					end
+				end
 			end
+			template.class = class
+			if customEnv then
+				template.virtualSpec = (class ~= baseClass) and true or nil
+			else
+				template.virtualSpec = (class ~= liveClass) and true or nil
+			end
+			local specCache = classCache[talentGroup]
+			if not specCache then
+				specCache = {}
+				classCache[talentGroup] = specCache
+			end
+			local tabTotals = {}
 			for tab, tree in ipairs(info) do
 				local ttab = template[tab]
 				if not ttab then
 					ttab = {}
 					template[tab] = ttab
 				end
-				for index = 1, #tree do
-					ttab[index] = select(5, GetTalentInfo(tab, index, nil, nil, talentGroup))
+				local cacheTab = specCache[tab]
+				if not cacheTab then
+					cacheTab = {}
+					specCache[tab] = cacheTab
 				end
+				local tabTotal = 0
+				for index = 1, #tree do
+					if shouldReadLive then
+						local rank = select(5, GetTalentInfo(tab, index, nil, nil, talentGroup)) or 0
+						ttab[index] = rank
+						cacheTab[index] = rank
+					else
+						if cacheTab[index] ~= nil then
+							ttab[index] = cacheTab[index]
+						elseif ttab[index] == nil then
+							ttab[index] = 0
+						end
+					end
+					tabTotal = tabTotal + (ttab[index] or 0)
+				end
+				tabTotals[#tabTotals + 1] = tostring(tabTotal)
 			end
+			self:ClassTrace("SpecState class=%s spec=%d virtual=%s tabs=%s", class, talentGroup, tostring(template.virtualSpec and true or false), table.concat(tabTotals, "/"))
 			self.alternates[talentGroup] = template
 			if self.template == template then
 				self:UpdateTooltip()
@@ -1146,6 +2280,7 @@ do
 				view:Update()
 			end
 		end
+		self:UpdateClassSwitchButtons()
 	end
 
 	function Talented:GetActiveSpec()
@@ -1162,30 +2297,13 @@ do
 end
 
 function Talented:GetTalentGroupName(talentGroup)
-    -- Ensure talentGroup is valid
-    if not talentGroup or type(talentGroup) ~= "number" then
-        return "Unknown Spec"
-    end
-    
-    -- Try to get the custom name from the server
-    local customName = GetCustomGameDataString and GetCustomGameDataString(21, talentGroup)
-    if customName and customName ~= "" then
-        return customName
-    end
-    
-    -- Check local storage as fallback
-    if self.db and self.db.profile.specNames and self.db.profile.specNames[talentGroup] then
-        return self.db.profile.specNames[talentGroup]
-    end
-    
-    -- Fallback to default names
-    if talentGroup == 1 then
-        return TALENT_SPEC_PRIMARY or "Spec 1"
-    elseif talentGroup == 2 then
-        return TALENT_SPEC_SECONDARY or "Spec 2"
-    else
-        return string.format("Spec %d", talentGroup)
-    end
+	if talentGroup == 1 then
+		return TALENT_SPEC_PRIMARY
+	elseif talentGroup == 2 then
+		return TALENT_SPEC_SECONDARY
+	else
+		return string.format("Spec %d", talentGroup)
+	end
 end
 -------------------------------------------------------------------------------
 -- view.lua
@@ -1332,7 +2450,7 @@ do
 			Talented:PackTemplate(curr)
 		end
 
-		self.spec = template.talentGroup
+		self.spec = template.virtualSpec and nil or template.talentGroup
 		self:SetClass(template.class)
 
 		return self:Update()
@@ -1367,6 +2485,12 @@ do
 	local LIGHTBLUE_FONT_COLOR = {r = 0.3, g = 0.9, b = 1}
 	function TalentView:Update()
 		local template, target = self.template, self.target
+		if self.class ~= template.class then
+			self:SetClass(template.class, true)
+			return
+		end
+		local isLiveSpec = template.talentGroup and not template.virtualSpec
+		local canEditTemplate = (self.mode == "edit")
 		local total = 0
 		local info = Talented:UncompressSpellData(template.class)
 		local at_cap = Talented:IsTemplateAtCap(template)
@@ -1379,7 +2503,7 @@ do
 					local button = self:GetUIElement(tab, index)
 					local color = GRAY_FONT_COLOR
 					local state = Talented:GetTalentState(template, tab, index)
-					if state == "empty" and (at_cap or self.mode == "view") then
+					if state == "empty" and (at_cap or not canEditTemplate) then
 						state = "unavailable"
 					end
 					if state == "unavailable" then
@@ -1404,7 +2528,7 @@ do
 					if req then
 						local ecolor = color
 						if ecolor == GREEN_FONT_COLOR then
-							if self.mode == "edit" then
+							if canEditTemplate then
 								local s = Talented:GetTalentState(template, tab, req)
 								if s ~= "full" then
 									ecolor = RED_FONT_COLOR
@@ -1413,8 +2537,11 @@ do
 								ecolor = NORMAL_FONT_COLOR
 							end
 						end
-						for _, element in ipairs(self:GetUIElement(tab, index, req)) do
-							element:SetVertexColor(ecolor.r, ecolor.g, ecolor.b)
+						local reqElements = self:GetUIElement(tab, index, req)
+						if reqElements then
+							for _, element in ipairs(reqElements) do
+								element:SetVertexColor(ecolor.r, ecolor.g, ecolor.b)
+							end
 						end
 					end
 					local targetvalue = target and target[tab][index]
@@ -1442,16 +2569,23 @@ do
 			frame.name:SetFormattedText(L["%s (%d)"], Talented.tabdata[template.class][tab].name, count)
 			total = total + count
 			local clear = frame.clear
-			if self.mode ~= "edit" or count <= 0 or self.spec then
+			if (not canEditTemplate) or count <= 0 or self.spec then
 				clear:Hide()
 			else
 				clear:Show()
 			end
 		end
-		local maxpoints = GetMaxPoints(nil, self.pet, self.spec)
+		local maxpoints
+		if template.virtualSpec then
+			maxpoints = Talented.max_talent_points or 71
+		else
+			maxpoints = GetMaxPoints(nil, self.pet, self.spec)
+		end
 		local points = self.frame.points
 		if points then
-			if Talented.db.profile.show_level_req then
+			if template.virtualSpec then
+				points:SetFormattedText(L["%d/%d"], total, maxpoints)
+			elseif Talented.db.profile.show_level_req then
 				points:SetFormattedText(L["Level %d"], self:GetReqLevel(total))
 			else
 				points:SetFormattedText(L["%d/%d"], total, maxpoints)
@@ -1468,7 +2602,7 @@ do
 		end
 		local pointsleft = self.frame.pointsleft
 		if pointsleft then
-			if maxpoints ~= total and template.talentGroup then
+			if maxpoints ~= total and (isLiveSpec or template.virtualSpec) then
 				pointsleft:Show()
 				pointsleft.text:SetFormattedText(L["You have %d talent |4point:points; left"], maxpoints - total)
 			else
@@ -1486,14 +2620,14 @@ do
 		end
 		local cb, activate = self.frame.checkbox, self.frame.bactivate
 if cb then
-	if template.talentGroup == GetActiveTalentGroup() or template.pet then
+	if (isLiveSpec and template.talentGroup == GetActiveTalentGroup()) or template.pet then
 		if activate then
 			activate:Hide()
 		end
 		cb:Show()
 		cb.label:SetText(L["Edit talents"])
 		cb.tooltip = L["Toggle editing of talents."]
-	elseif template.talentGroup then
+	elseif isLiveSpec then
 		cb:Hide()
 		if activate then
 			activate.talentGroup = template.talentGroup
@@ -1504,10 +2638,15 @@ if cb then
 			activate:Hide()
 		end
 		cb:Show()
-		cb.label:SetText(L["Edit template"])
-		cb.tooltip = L["Toggle edition of the template."]
+		if template.talentGroup then
+			cb.label:SetText(L["Edit talents"])
+			cb.tooltip = L["Toggle editing of talents."]
+		else
+			cb.label:SetText(L["Edit template"])
+			cb.tooltip = L["Toggle edition of the template."]
+		end
 	end
-	cb:SetChecked(self.mode == "edit")
+	cb:SetChecked(canEditTemplate)
 end
 		local targetname = self.frame.targetname
 	if targetname then
@@ -1516,7 +2655,7 @@ end
 			targetname:SetText(TALENT_SPEC_PET_PRIMARY)
 		elseif template.talentGroup then
 			targetname:Show()
-			if template.talentGroup == GetActiveTalentGroup() and target then
+			if isLiveSpec and template.talentGroup == GetActiveTalentGroup() and target then
 				targetname:SetText(L["Target: %s"]:format(target.name))
 			else
 				targetname:SetText(Talented:GetTalentGroupName(template.talentGroup)) -- Updated this line
@@ -1543,15 +2682,24 @@ end
 	end
 
 	function TalentView:UpdateTalent(tab, index, offset)
-		if self.mode ~= "edit" then return end
-		if self.spec then
+		local template = self.template
+		local canEditTemplate = (self.mode == "edit")
+		if not canEditTemplate then return end
+		if template.virtualSpec and Talented:IsCustomTalentEnvironment() then
+			if offset > 0 then
+				Talented:EnsureNativeClassSelection()
+				LearnTalent(tab, index, false)
+				Talented:PLAYER_TALENT_UPDATE()
+				Talented:CHARACTER_POINTS_CHANGED()
+			end
+		end
+		if self.spec and not template.virtualSpec then
 			-- Applying talent
 			if offset > 0 then
 				Talented:LearnTalent(self.template, tab, index)
 			end
 			return
 		end
-		local template = self.template
 
 		if offset > 0 and Talented:IsTemplateAtCap(template) then return end
 		local s = Talented:GetTalentState(template, tab, index)
@@ -1568,6 +2716,14 @@ end
 		if value == original or not Talented:ValidateTalentBranch(template, tab, index, value) then return end
 		template[tab][index] = value
 		template.points = nil
+		if template.virtualSpec and template.talentGroup and Talented.multiClassCache then
+			local classCache = Talented.multiClassCache[template.class]
+			local specCache = classCache and classCache[template.talentGroup]
+			local cacheTab = specCache and specCache[tab]
+			if cacheTab then
+				cacheTab[index] = value
+			end
+		end
 		for _, view in Talented:IterateTalentViews(template) do
 			view:Update()
 		end
@@ -1577,7 +2733,7 @@ end
 
 	function TalentView:ClearTalentTab(t)
 		local template = self.template
-		if template and not template.talentGroup then
+		if template and (not template.talentGroup or template.virtualSpec) then
 			local tab = template[t]
 			for index, value in ipairs(tab) do
 				tab[index] = 0
@@ -2088,7 +3244,7 @@ do
 				self:UpdateView()
 				return
 			end
-		elseif select(2, UnitClass "player") ~= template.class then
+		elseif not self:IsPlayerClass(template.class) then
 			self:Print(L["Sorry, I can't apply this template because it doesn't match your class!"])
 			self.mode = "view"
 			self:UpdateView()
@@ -2471,8 +3627,8 @@ do
 
 	local function ImportCode(code)
 		local a = (WH_MAP:find(code:sub(1, 1), nil, true) - 1) * 10
-		local b = (WH_MAP:find(code:sub(2, 2), nil, true) - 1) / 2
-		local family = a + math.floor(b)
+		local b = bit.rshift(WH_MAP:find(code:sub(2, 2), nil, true) - 1, 1)
+		local family = a + b
 		local class = Talented:GetPetClassByFamily(family)
 
 		return TALENTED_CLASS_CODE[class] .. map(code:sub(3), WH_MAP, TALENTED_MAP)
@@ -2546,4 +3702,1529 @@ end
 
 function Talented:GLYPH_UPDATED()
     self:UpdateView()
+end
+
+do
+	local addonName = "SynastriaBuildManager"
+	local SBM = {}
+	_G[addonName] = SBM
+	local BUILD_VERSION = "SBM1"
+	local ActionTypes = {
+		CALL = "call",
+		DELAY = "delay",
+		CLICK_PERK = "click_perk",
+		CLICK_TOGGLE = "click_toggle",
+		COMPLETE = "complete"
+	}
+
+	local buildActionQueue = {}
+	local buildQueueHead = 1
+	local buildQueueTail = 0
+	local buildQueueFrame = CreateFrame("Frame")
+	local buildQueueTimer = 0
+	local buildQueueProcessing = false
+	local MAX_QUEUE_ACTIONS_PER_TICK = 8
+
+	local function QueueBuildAction(actionType, data)
+		buildQueueTail = buildQueueTail + 1
+		buildActionQueue[buildQueueTail] = {
+			type = actionType,
+			data = data or {}
+		}
+	end
+
+	local function ClearBuildQueue()
+		buildActionQueue = {}
+		buildQueueHead = 1
+		buildQueueTail = 0
+		buildQueueFrame:SetScript("OnUpdate", nil)
+		buildQueueTimer = 0
+		buildQueueProcessing = false
+	end
+
+	local function ProcessBuildQueue(_, elapsed)
+		local actionsProcessed = 0
+		while buildQueueHead <= buildQueueTail and actionsProcessed < MAX_QUEUE_ACTIONS_PER_TICK do
+			local action = buildActionQueue[buildQueueHead]
+			if action.type == ActionTypes.DELAY then
+				buildQueueTimer = buildQueueTimer + elapsed
+				if buildQueueTimer >= (action.data.duration or 0) then
+					buildActionQueue[buildQueueHead] = nil
+					buildQueueHead = buildQueueHead + 1
+					buildQueueTimer = 0
+				else
+					return
+				end
+			else
+				buildActionQueue[buildQueueHead] = nil
+				buildQueueHead = buildQueueHead + 1
+				if action.type == ActionTypes.CLICK_PERK then
+					local frameName = "PerkMgrFrame-PerkLine-" .. tostring(action.data.position or "")
+					local perkFrame = _G[frameName]
+					if perkFrame and perkFrame.Click then
+						perkFrame:Click()
+					end
+				elseif action.type == ActionTypes.CLICK_TOGGLE then
+					local toggleButton = _G["PerkMgrFrame-Toggle"]
+					if toggleButton and toggleButton.Click then
+						toggleButton:Click()
+					end
+				elseif action.type == ActionTypes.CALL then
+					local fn = action.data.fn
+					if type(fn) == "function" then
+						pcall(fn, action.data.payload)
+					end
+				elseif action.type == ActionTypes.COMPLETE then
+					local message = action.data.message
+					if message and message ~= "" then
+						Talented:Print(message)
+					end
+				end
+				actionsProcessed = actionsProcessed + 1
+			end
+		end
+		if buildQueueHead > buildQueueTail then
+			buildActionQueue = {}
+			buildQueueHead = 1
+			buildQueueTail = 0
+			buildQueueFrame:SetScript("OnUpdate", nil)
+			buildQueueProcessing = false
+		end
+	end
+
+	local function StartBuildQueue()
+		if buildQueueProcessing then
+			return
+		end
+		buildQueueProcessing = true
+		buildQueueTimer = 0
+		buildQueueFrame:SetScript("OnUpdate", ProcessBuildQueue)
+	end
+
+	local function QueueAction(actionType, data)
+		QueueBuildAction(actionType, data)
+	end
+
+	local function ProcessQueue(self, elapsed)
+		ProcessBuildQueue(self, elapsed)
+	end
+
+	local function StartQueue()
+		StartBuildQueue()
+	end
+
+	local function ClearQueue()
+		ClearBuildQueue()
+	end
+
+	local function GetPerkActiveState(perkId)
+		if type(GetPerkActive) == "function" then
+			local ok, value = pcall(GetPerkActive, perkId)
+			if ok then
+				return value and true or false
+			end
+		end
+		return false
+	end
+
+	local function NormalizePerkUiState()
+		local filter = _G["PerkMgrFrame-FilterButton"]
+		if filter and filter.Click then
+			filter:Click()
+		end
+		if _G.DropDownList1Button1 and _G.DropDownList1Button1.Click then
+			_G.DropDownList1Button1:Click()
+		end
+		local cats = {"Off", "Def", "Sup", "Uti", "Cla", "Clb", "Mis"}
+		for _, cat in ipairs(cats) do
+			local catFrame = _G["PerkMgrFrame-Cat" .. cat]
+			if catFrame and catFrame.isCollapsed and catFrame.Click then
+				catFrame:Click()
+			end
+		end
+	end
+
+	function Talented:GetAllSynastriaPerks()
+		local perks = {}
+		local perkList = _G["PerkMgrFrame-Content1"]
+		if not perkList then
+			return perks
+		end
+		NormalizePerkUiState()
+		local children = {perkList:GetChildren()}
+		local startIndex
+		for i = 1, #children do
+			local child = children[i]
+			if child and child.GetName and child:GetName() == "PerkMgrFrame-PerkLine-1" then
+				startIndex = i
+				break
+			end
+		end
+		if not startIndex then
+			return perks
+		end
+		for i = startIndex, #children do
+			local perkFrame = children[i]
+			if perkFrame and perkFrame.perk and perkFrame.perk.id then
+				local perkId = perkFrame.perk.id
+				if perkId == 1042 then
+					break
+				end
+				perks[#perks + 1] = {
+					id = perkId,
+					active = GetPerkActiveState(perkId),
+					position = i - startIndex + 1
+				}
+			else
+				break
+			end
+		end
+		return perks
+	end
+
+	function Talented:ExportPerksString()
+		local activePerks = {}
+		for _, perk in ipairs(self:GetAllSynastriaPerks()) do
+			if perk.active then
+				activePerks[#activePerks + 1] = tostring(perk.id)
+			end
+		end
+		table.sort(activePerks, function(a, b)
+			return tonumber(a) < tonumber(b)
+		end)
+		return table.concat(activePerks, ",")
+	end
+
+	function Talented:QueuePerkImport(perkString)
+		if not perkString or perkString == "" then
+			return 0
+		end
+		local targetPerkIds = {}
+		for perkId in string.gmatch(perkString, "([^,]+)") do
+			local id = tonumber(perkId)
+			if id then
+				targetPerkIds[id] = true
+			end
+		end
+		if next(targetPerkIds) == nil then
+			return 0
+		end
+
+		local perks = self:GetAllSynastriaPerks()
+		local deactivateList, activateList = {}, {}
+		for _, perk in ipairs(perks) do
+			local shouldBeActive = targetPerkIds[perk.id] and true or false
+			if perk.active and not shouldBeActive then
+				deactivateList[#deactivateList + 1] = perk
+			elseif (not perk.active) and shouldBeActive then
+				activateList[#activateList + 1] = perk
+			end
+		end
+
+		local changeCount = 0
+		for _, perk in ipairs(deactivateList) do
+			QueueBuildAction(ActionTypes.CLICK_PERK, {position = perk.position})
+			QueueBuildAction(ActionTypes.DELAY, {duration = 0.01})
+			QueueBuildAction(ActionTypes.CLICK_TOGGLE, {})
+			QueueBuildAction(ActionTypes.DELAY, {duration = 0.01})
+			changeCount = changeCount + 1
+		end
+		for _, perk in ipairs(activateList) do
+			QueueBuildAction(ActionTypes.CLICK_PERK, {position = perk.position})
+			QueueBuildAction(ActionTypes.DELAY, {duration = 0.01})
+			QueueBuildAction(ActionTypes.CLICK_TOGGLE, {})
+			QueueBuildAction(ActionTypes.DELAY, {duration = 0.01})
+			changeCount = changeCount + 1
+		end
+		return changeCount
+	end
+
+	local function BuildTemplateFromCache(self, className, specCache)
+		local info = self:UncompressSpellData(className)
+		if not info then
+			return nil
+		end
+		local template = {class = className}
+		for tab, tree in ipairs(info) do
+			local ttab = {}
+			local cacheTab = specCache and specCache[tab]
+			for index = 1, #tree do
+				ttab[index] = (cacheTab and cacheTab[index]) or 0
+			end
+			template[tab] = ttab
+		end
+		return template
+	end
+
+	local function GetClassIndex(self, className)
+		for index, name in ipairs(self:GetPlayerClasses()) do
+			if name == className then
+				return index
+			end
+		end
+	end
+
+	local function IsLiveTalentFrameClass(self, className)
+		if not className then
+			return false
+		end
+		local liveClass = self:GetCurrentClassFromTalentTabs()
+		if liveClass == className then
+			return true
+		end
+		if not self.tabdata or not self.tabdata[className] then
+			return false
+		end
+		local expected = self.tabdata[className][1]
+		if not expected then
+			return false
+		end
+		local liveName, _, _, liveBackground = GetTalentTabInfo(1)
+		if expected.background and liveBackground and expected.background == liveBackground then
+			return true
+		end
+		if expected.name and liveName and expected.name == liveName then
+			return true
+		end
+		return false
+	end
+
+	local function EnsureClassForImport(self, className, forcedIndex)
+		local classIndex = GetClassIndex(self, className)
+		local indexToUse = forcedIndex or classIndex
+		if not indexToUse then
+			return false
+		end
+		for _ = 1, 2 do
+			self.manualClassIndex = indexToUse
+			self.manualPlayerClass = className
+			self:TryServerClassSwitch(indexToUse, className)
+			self:SetManualPlayerClass(className)
+			if IsLiveTalentFrameClass(self, className) then
+				return true
+			end
+		end
+		return false
+	end
+
+	local function BuildEmptyTemplate(self, className)
+		local info = self:UncompressSpellData(className)
+		if not info then
+			return nil
+		end
+		local template = {class = className}
+		for tab, tree in ipairs(info) do
+			local ttab = {}
+			for index = 1, #tree do
+				ttab[index] = 0
+			end
+			template[tab] = ttab
+		end
+		return template
+	end
+
+	local function TemplateHasPoints(template)
+		if type(template) ~= "table" then
+			return false
+		end
+		for tab = 1, #template do
+			local ttab = template[tab]
+			if type(ttab) == "table" then
+				for i = 1, #ttab do
+					if (ttab[i] or 0) > 0 then
+						return true
+					end
+				end
+			end
+		end
+		return false
+	end
+
+	local BASE36_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	local PERK_PACK_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
+
+	local function ToBase36(value)
+		value = tonumber(value) or 0
+		if value <= 0 then
+			return "0"
+		end
+		local out = {}
+		while value > 0 do
+			local rem = math.fmod(value, 36)
+			out[#out + 1] = BASE36_ALPHABET:sub(rem + 1, rem + 1)
+			value = math.floor(value / 36)
+		end
+		local i, j = 1, #out
+		while i < j do
+			out[i], out[j] = out[j], out[i]
+			i = i + 1
+			j = j - 1
+		end
+		return table.concat(out)
+	end
+
+	local function ParseBase36(text)
+		if not text or text == "" then
+			return nil
+		end
+		local value = 0
+		for i = 1, #text do
+			local ch = text:sub(i, i):upper()
+			local idx = BASE36_ALPHABET:find(ch, 1, true)
+			if not idx then
+				return nil
+			end
+			value = value * 36 + (idx - 1)
+		end
+		return value
+	end
+
+	local function EncodeVarint32(value)
+		local out = {}
+		value = tonumber(value) or 0
+		repeat
+			local chunk = bit.band(value, 31)
+			value = bit.rshift(value, 5)
+			if value > 0 then
+				chunk = chunk + 32
+			end
+			out[#out + 1] = PERK_PACK_ALPHABET:sub(chunk + 1, chunk + 1)
+		until value == 0
+		return table.concat(out)
+	end
+
+	local function DecodeVarint32Stream(payload)
+		local out = {}
+		local idx = 1
+		local len = #payload
+		while idx <= len do
+			local shift = 1
+			local value = 0
+			local hasMore = true
+			while hasMore do
+				if idx > len then
+					return nil
+				end
+				local ch = payload:sub(idx, idx)
+				local pos = PERK_PACK_ALPHABET:find(ch, 1, true)
+				if not pos then
+					return nil
+				end
+				local v = pos - 1
+				local data = bit.band(v, 31)
+				value = value + data * shift
+				shift = bit.lshift(shift, 5)
+				hasMore = v >= 32
+				idx = idx + 1
+			end
+			out[#out + 1] = value
+		end
+		return out
+	end
+
+	function Talented:EncodePerkPayload(perkCsv)
+		if not perkCsv or perkCsv == "" then
+			return ""
+		end
+		local ids, seen = {}, {}
+		for raw in perkCsv:gmatch("([^,;]+)") do
+			local id = tonumber(raw)
+			if id and id > 0 and not seen[id] then
+				seen[id] = true
+				ids[#ids + 1] = id
+			end
+		end
+		if #ids == 0 then
+			return ""
+		end
+		table.sort(ids)
+		local chunksP2 = {}
+		local chunksP1 = {}
+		local prev = 0
+		for i, id in ipairs(ids) do
+			local delta = (i == 1) and id or (id - prev)
+			chunksP2[#chunksP2 + 1] = EncodeVarint32(delta)
+			chunksP1[#chunksP1 + 1] = ToBase36(delta)
+			prev = id
+		end
+		local p2 = "P2" .. table.concat(chunksP2, "")
+		local p1 = "P1." .. table.concat(chunksP1, ".")
+		if #p2 < #p1 then
+			return p2
+		end
+		return p1
+	end
+
+	function Talented:DecodePerkPayload(payload)
+		if not payload or payload == "" then
+			return ""
+		end
+		if payload:sub(1, 2) == "P2" then
+			local body = payload:sub(3)
+			if body == "" then
+				return ""
+			end
+			local deltas = DecodeVarint32Stream(body)
+			if not deltas then
+				return payload:gsub(";", ",")
+			end
+			local ids = {}
+			local current = 0
+			for _, delta in ipairs(deltas) do
+				current = current + delta
+				ids[#ids + 1] = tostring(current)
+			end
+			return table.concat(ids, ",")
+		end
+		if payload:sub(1, 3) ~= "P1." then
+			return payload:gsub(";", ",")
+		end
+		local body = payload:sub(4)
+		if body == "" then
+			return ""
+		end
+		local ids = {}
+		local current = 0
+		for token in body:gmatch("([^%.]+)") do
+			local delta = ParseBase36(token)
+			if not delta then
+				return payload:gsub(";", ",")
+			end
+			current = current + delta
+			ids[#ids + 1] = tostring(current)
+		end
+		return table.concat(ids, ",")
+	end
+
+	function Talented:ExportDualClassTalents()
+		self:UpdatePlayerSpecs()
+		local lines = {}
+		local classes = self:GetPlayerClasses()
+		local groupCount = GetNumTalentGroups() or 1
+		local currentClass = self:GetCurrentPlayerClass()
+
+		for _, className in ipairs(classes) do
+			local classCache = self.multiClassCache and self.multiClassCache[className]
+			for spec = 1, groupCount do
+				local template
+				if className == currentClass and self.alternates and self.alternates[spec] and self.alternates[spec].class == className then
+					template = {}
+					self:CopyPackedTemplate(self.alternates[spec], template)
+					template.class = className
+				elseif classCache and classCache[spec] then
+					template = BuildTemplateFromCache(self, className, classCache[spec])
+				end
+				if template then
+					local code = self:TemplateToString(template)
+					lines[#lines + 1] = ("T:%s:%d:%s"):format(className, spec, code)
+				end
+			end
+		end
+		return table.concat(lines, "\n")
+	end
+
+	function Talented:ApplyTemplateToActiveGroup(template)
+		if not template or not template.class or not RAID_CLASS_COLORS[template.class] then
+			return false
+		end
+		if not IsLiveTalentFrameClass(self, template.class) then
+			EnsureClassForImport(self, template.class)
+		end
+		if not IsLiveTalentFrameClass(self, template.class) then
+			-- In custom multiclass environments the UI's live tab classifier can lag
+			-- behind manual class switches. If manual class is already target class,
+			-- continue instead of skipping import.
+			if not (self:IsCustomTalentEnvironment() and self:GetCurrentPlayerClass() == template.class) then
+				self:Print("Skipping %s template: class switch not ready.", template.class)
+				return false
+			end
+		end
+		local group = GetActiveTalentGroup()
+		if not group then
+			return false
+		end
+
+		local count = 0
+		for tab, tree in ipairs(self:UncompressSpellData(template.class)) do
+			for index = 1, #tree do
+				local currentRank = select(5, GetTalentInfo(tab, index, nil, false, group)) or 0
+				local delta = (template[tab][index] or 0) - currentRank
+				if delta > 0 then
+					count = count + delta
+				end
+			end
+		end
+		if count <= 0 then
+			return true
+		end
+		local available = GetUnspentTalentPoints(nil, false, group) or 0
+		if count > available then
+			-- In custom multiclass environments, available points can briefly report
+			-- from the previous class right after a class switch; don't hard-fail early.
+			if not self:IsCustomTalentEnvironment() then
+				self:Print("Not enough points to apply %s spec %d (need %d).", template.class, group, count)
+				return false
+			end
+		end
+
+		local oldPreview = GetCVar("previewTalents")
+		SetCVar("previewTalents", "1")
+		ResetGroupPreviewTalentPoints(false, group)
+		local cp = GetUnspentTalentPoints(nil, false, group) or 0
+		local loopGuard = 0
+		while true do
+			local missing, set = false, false
+			for tab, tree in ipairs(self:UncompressSpellData(template.class)) do
+				local ttab = template[tab]
+				for index = 1, #tree do
+					local rank = select(9, GetTalentInfo(tab, index, nil, false, group)) or 0
+					local targetRank = (ttab and ttab[index]) or 0
+					local delta = targetRank - rank
+					if delta > 0 then
+						AddPreviewTalentPoints(tab, index, delta, false, group)
+						local newRank = select(9, GetTalentInfo(tab, index, nil, false, group)) or rank
+						if newRank < targetRank then
+							missing = true
+						elseif newRank > rank then
+							set = true
+						end
+						cp = cp - newRank + rank
+					end
+				end
+			end
+			if not missing then
+				break
+			end
+			loopGuard = loopGuard + 1
+			if (not set) or loopGuard > 60 then
+				SetCVar("previewTalents", oldPreview)
+				ResetGroupPreviewTalentPoints(false, group)
+				return false
+			end
+		end
+		if cp < 0 then
+			SetCVar("previewTalents", oldPreview)
+			ResetGroupPreviewTalentPoints(false, group)
+			return false
+		end
+		LearnPreviewTalents(false)
+		SetCVar("previewTalents", oldPreview)
+		return true
+	end
+
+	function Talented:ImportDualClassTalents(importText)
+		if not importText or importText == "" then
+			return false
+		end
+		local records = {}
+		local fallbackClassSpec = {}
+		for rawLine in importText:gmatch("[^\r\n]+") do
+			local line = rawLine:gsub("^%s*(.-)%s*$", "%1")
+			if line ~= "" then
+				local className, specText, code = line:match("^T:([^:]+):(%d+):(.+)$")
+				if className and code then
+					records[#records + 1] = {
+						class = className:upper(),
+						spec = tonumber(specText) or 1,
+						code = code
+					}
+				else
+					local oldClass, oldCode = line:match("^([^:]+):(.+)$")
+					if oldClass and oldCode then
+						oldClass = oldClass:upper()
+						records[#records + 1] = {
+							class = oldClass,
+							spec = nil,
+							code = oldCode
+						}
+					end
+				end
+			end
+		end
+		if #records == 0 then
+			return false
+		end
+
+		local ordered = {}
+		local available = {}
+		for _, className in ipairs(self:GetPlayerClasses()) do
+			available[className] = true
+		end
+		for _, className in ipairs(self:GetPlayerClasses()) do
+			for _, record in ipairs(records) do
+				if record.class == className then
+					ordered[#ordered + 1] = record
+				end
+			end
+		end
+		if #ordered == 0 then
+			return false
+		end
+
+		for _, record in ipairs(ordered) do
+			local classIndex = GetClassIndex(self, record.class)
+			if classIndex and available[record.class] then
+				local fallbackIndex
+				local classCount = #self:GetPlayerClasses()
+				if classCount >= 2 then
+					if classIndex == 1 then
+						fallbackIndex = 2
+					elseif classIndex == 2 then
+						fallbackIndex = 1
+					end
+				end
+
+				QueueBuildAction(ActionTypes.CALL, {
+					fn = function(payload)
+						EnsureClassForImport(Talented, payload.className, payload.preferredIndex)
+					end,
+					payload = {
+						className = record.class,
+						classIndex = classIndex,
+						preferredIndex = classIndex
+					}
+				})
+				QueueBuildAction(ActionTypes.DELAY, {duration = 0.55})
+				if fallbackIndex then
+					QueueBuildAction(ActionTypes.CALL, {
+						fn = function(payload)
+							if not IsLiveTalentFrameClass(Talented, payload.className) then
+								EnsureClassForImport(Talented, payload.className, payload.fallbackIndex)
+							end
+						end,
+						payload = {
+							className = record.class,
+							fallbackIndex = fallbackIndex
+						}
+					})
+					QueueBuildAction(ActionTypes.DELAY, {duration = 0.55})
+				end
+
+				if record.spec then
+					QueueBuildAction(ActionTypes.CALL, {
+						fn = function(payload)
+							if type(SetActiveTalentGroup) == "function" and payload.spec ~= GetActiveTalentGroup() then
+								pcall(SetActiveTalentGroup, payload.spec)
+							end
+						end,
+						payload = {spec = record.spec}
+					})
+					QueueBuildAction(ActionTypes.DELAY, {duration = 0.50})
+				end
+
+				local applyDone = {}
+				for attempt = 1, 3 do
+					QueueBuildAction(ActionTypes.CALL, {
+						fn = function(payload)
+							if payload.done[payload.className] then
+								return
+							end
+							local template = {}
+							local ok = pcall(Talented.StringToTemplate, Talented, payload.code, template)
+							if not ok or template.class ~= payload.className then
+								if payload.attempt == 1 then
+									Talented:Print("Failed to decode talent string for %s.", payload.className)
+								end
+								return
+							end
+							local applied = Talented:ApplyTemplateToActiveGroup(template)
+							if not applied then
+								if payload.fallbackIndex and bit.band(payload.attempt, 1) == 0 then
+									EnsureClassForImport(Talented, payload.className, payload.fallbackIndex)
+								elseif payload.preferredIndex then
+									EnsureClassForImport(Talented, payload.className, payload.preferredIndex)
+								else
+									EnsureClassForImport(Talented, payload.className)
+								end
+								applied = Talented:ApplyTemplateToActiveGroup(template)
+							end
+							if applied then
+								Talented:Print("Applied talents for %s.", payload.className)
+								payload.done[payload.className] = true
+							elseif payload.attempt == 3 then
+								Talented:Print("Failed to apply talents for %s.", payload.className)
+							end
+						end,
+						payload = {
+							className = record.class,
+							code = record.code,
+							preferredIndex = classIndex,
+							fallbackIndex = fallbackIndex,
+							attempt = attempt,
+							done = applyDone
+						}
+					})
+					QueueBuildAction(ActionTypes.DELAY, {duration = 0.55})
+				end
+			end
+		end
+		return true
+	end
+
+	function Talented:ExportSynastriaBuildString()
+		self:UpdatePlayerSpecs()
+		local perkSnapshot = self:GetAllSynastriaPerks()
+		if not perkSnapshot or #perkSnapshot == 0 then
+			self:Print("No perk data detected yet. Please open View Perks before exporting a sharable string.")
+			return nil
+		end
+		local classes = self:GetPlayerClasses()
+		local activeSpec = GetActiveTalentGroup() or 1
+		local tokens = {}
+		local exportedClass = {}
+		for _, className in ipairs(classes) do
+			local template
+			if self.alternates and self.alternates[activeSpec] and self.alternates[activeSpec].class == className then
+				template = {}
+				self:CopyPackedTemplate(self.alternates[activeSpec], template)
+				template.class = className
+			else
+				local classCache = self.multiClassCache and self.multiClassCache[className]
+				if classCache and classCache[activeSpec] then
+					template = BuildTemplateFromCache(self, className, classCache[activeSpec])
+				elseif classCache then
+					for spec, specCache in pairs(classCache) do
+						if type(spec) == "number" and specCache then
+							template = BuildTemplateFromCache(self, className, specCache)
+							break
+						end
+					end
+				end
+			end
+			if (not template) or (not TemplateHasPoints(template)) then
+				EnsureClassForImport(self, className)
+				self:CaptureClassSpecsFromServer(className)
+				if not self:CaptureClassSpecsFromSpellbook(className) then
+					-- no-op; keep best known cache snapshot below
+				end
+				local classCache = self.multiClassCache and self.multiClassCache[className]
+				if classCache and classCache[activeSpec] then
+					template = BuildTemplateFromCache(self, className, classCache[activeSpec])
+				end
+			end
+			if template then
+				local code = self:TemplateToString(template)
+				if code and code ~= "" then
+					if not TemplateHasPoints(template) then
+						self:Print("Warning: %s export appears to have 0 talent points. Open/switch to %s talents before exporting if this is unexpected.", className, className)
+					end
+					tokens[#tokens + 1] = className
+					tokens[#tokens + 1] = code
+					exportedClass[className] = true
+				end
+			end
+		end
+
+		-- In dual-class mode, always include both class tokens even if cache is missing.
+		if #classes >= 2 then
+			for _, className in ipairs(classes) do
+				if not exportedClass[className] then
+					local classCache = self.multiClassCache and self.multiClassCache[className]
+					local template
+					if classCache and classCache[activeSpec] then
+						template = BuildTemplateFromCache(self, className, classCache[activeSpec])
+					end
+					if not template then
+						self:CaptureClassSpecsFromSpellbook(className)
+						classCache = self.multiClassCache and self.multiClassCache[className]
+						if classCache and classCache[activeSpec] then
+							template = BuildTemplateFromCache(self, className, classCache[activeSpec])
+						end
+					end
+					if not template then
+						template = BuildEmptyTemplate(self, className)
+					end
+					if template then
+						local code = self:TemplateToString(template)
+						if code and code ~= "" then
+							if not TemplateHasPoints(template) then
+								self:Print("Warning: %s fallback export is empty (0 points).", className)
+							end
+							tokens[#tokens + 1] = className
+							tokens[#tokens + 1] = code
+						end
+					end
+				end
+			end
+		end
+
+		local perkData = self:EncodePerkPayload(self:ExportPerksString() or "")
+		tokens[#tokens + 1] = "PERKS"
+		tokens[#tokens + 1] = perkData
+		return table.concat(tokens, ",")
+	end
+
+	function Talented:BuildCommunitySubmissionString(name, description, payload, metadata)
+		if not payload or payload == "" then
+			return nil
+		end
+		local safeName = tostring(name or "Shared Preset"):gsub('[\r\n"]+', " "):gsub("^%s*(.-)%s*$", "%1")
+		local safeDesc = tostring(description or ""):gsub('[\r\n"]+', " "):gsub("^%s*(.-)%s*$", "%1")
+		local safeCategory = metadata and tostring(metadata.category or ""):gsub('[\r\n"]+', " "):gsub("^%s*(.-)%s*$", "%1") or ""
+		local safeSubCategory = metadata and tostring(metadata.subcategory or ""):gsub('[\r\n"]+', " "):gsub("^%s*(.-)%s*$", "%1") or ""
+		local safeIcon = metadata and tostring(metadata.icon or ""):gsub('[\r\n"]+', " "):gsub("^%s*(.-)%s*$", "%1") or ""
+		if safeName == "" then
+			safeName = "Shared Preset"
+		end
+		if safeCategory ~= "" or safeSubCategory ~= "" or safeIcon ~= "" then
+			return ('SUB2,"%s","%s","%s","%s","%s","%s"'):format(safeName, safeDesc, safeCategory, safeSubCategory, safeIcon, payload)
+		end
+		return ('SUB1,"%s","%s","%s"'):format(safeName, safeDesc, payload)
+	end
+
+	function Talented:GetCommunitySuggestionName()
+		local displayClass = select(1, UnitClass("player"))
+		if type(displayClass) == "string" and displayClass ~= "" then
+			return displayClass
+		end
+		if self.template and self.template.name and self.template.name ~= "" then
+			return self.template.name
+		end
+		return "Shared Preset"
+	end
+
+	function Talented:ParseCommunitySubmissionString(text)
+		if type(text) ~= "string" then
+			return nil
+		end
+		local compact = text:gsub("^%s*(.-)%s*$", "%1")
+		local name2, description2, category2, subCategory2, icon2, payload2 = compact:match('^SUB2,"([^"]*)","([^"]*)","([^"]*)","([^"]*)","([^"]*)","(.-)"$')
+		if payload2 and payload2 ~= "" then
+			return {
+				name = name2,
+				description = description2,
+				category = category2,
+				subcategory = subCategory2,
+				icon = icon2,
+				payload = payload2
+			}
+		end
+		local name, description, payload = compact:match('^SUB1,"([^"]*)","([^"]*)","(.-)"$')
+		if payload and payload ~= "" then
+			return {
+				name = name,
+				description = description,
+				payload = payload
+			}
+		end
+		return nil
+	end
+
+	function Talented:ExportCommunitySubmission(name, description)
+		local payload = self:ExportSynastriaBuildString()
+		if not payload or payload == "" then
+			return nil
+		end
+		local defaultName = self:GetCommunitySuggestionName()
+		return self:BuildCommunitySubmissionString(name or defaultName, description or "", payload)
+	end
+
+	function Talented:ImportSynastriaBuildString(importText)
+		if not importText or importText == "" then
+			self:Print("Please provide a valid import string.")
+			return false
+		end
+		ClearBuildQueue()
+		do
+			local submission = self:ParseCommunitySubmissionString(importText)
+			if submission and submission.payload then
+				importText = submission.payload
+				if submission.name and submission.name ~= "" then
+					if submission.description and submission.description ~= "" then
+						self:Print('Loading preset "%s" - %s', submission.name, submission.description)
+					else
+						self:Print('Loading preset "%s"', submission.name)
+					end
+				end
+			end
+		end
+		do
+			local compactInput = tostring(importText):gsub("^%s*(.-)%s*$", "%1")
+			local wrappedPayload = compactInput:match('^"%s*.-%s*"%s*,%s*"(.-)"%s*$')
+			if wrappedPayload and wrappedPayload ~= "" then
+				importText = wrappedPayload
+			end
+		end
+
+		local lines = {}
+		for rawLine in importText:gmatch("[^\r\n]+") do
+			local line = rawLine:gsub("^%s*(.-)%s*$", "%1")
+			if line ~= "" then
+				lines[#lines + 1] = line
+			end
+		end
+		if #lines == 0 then
+			self:Print("No valid build data found.")
+			return false
+		end
+
+		do
+			local compact = table.concat(lines, ",")
+			local tokens = {}
+			for token in compact:gmatch("([^,]+)") do
+				local trimmed = token:gsub("^%s*(.-)%s*$", "%1")
+				if trimmed ~= "" then
+					tokens[#tokens + 1] = trimmed
+				end
+			end
+			local perkLine
+			local talentLines = {}
+			local foundPerksMarker = false
+			local i = 1
+			while i <= #tokens do
+				local token = tokens[i]
+				if token:upper() == "PERKS" then
+					foundPerksMarker = true
+					perkLine = self:DecodePerkPayload(tokens[i + 1] or "")
+					break
+				end
+				local className = token:upper()
+				local code = tokens[i + 1]
+				if not code then
+					break
+				end
+				if self.spelldata and self.spelldata[className] then
+					talentLines[#talentLines + 1] = className .. ":" .. code
+				end
+				i = i + 2
+			end
+			if foundPerksMarker and (#talentLines > 0 or (perkLine and perkLine ~= "")) then
+				local perkChanges = 0
+				ClearBuildQueue()
+				if perkLine and perkLine ~= "" then
+					perkChanges = self:QueuePerkImport(perkLine)
+				end
+				local importedTalents = false
+				if #talentLines > 0 then
+					importedTalents = self:ImportDualClassTalents(table.concat(talentLines, "\n"))
+				end
+				QueueBuildAction(ActionTypes.COMPLETE, {
+					message = ("Synastria build import queued (perk changes: %d, talents: %s)."):format(perkChanges, importedTalents and "yes" or "no")
+				})
+				StartBuildQueue()
+				return true
+			end
+		end
+
+		local perkLine
+		local talentLines = {}
+		local offset = 1
+		if lines[1] == BUILD_VERSION then
+			offset = 2
+			local perks = lines[offset]
+			if perks and perks:match("^PERKS:") then
+				perkLine = perks:gsub("^PERKS:", "")
+				offset = offset + 1
+			end
+			for i = offset, #lines do
+				talentLines[#talentLines + 1] = lines[i]
+			end
+		else
+			local first = lines[1]
+			if first and first:match("^[0-9,]+$") then
+				perkLine = first
+				offset = 2
+			end
+			for i = offset, #lines do
+				talentLines[#talentLines + 1] = lines[i]
+			end
+		end
+
+		local perkChanges = 0
+		if perkLine and perkLine ~= "" then
+			perkChanges = self:QueuePerkImport(perkLine)
+		end
+
+		local importedTalents = false
+		if #talentLines > 0 then
+			importedTalents = self:ImportDualClassTalents(table.concat(talentLines, "\n"))
+		end
+
+		QueueBuildAction(ActionTypes.COMPLETE, {
+			message = ("Synastria build import queued (perk changes: %d, talents: %s)."):format(perkChanges, importedTalents and "yes" or "no")
+		})
+		StartBuildQueue()
+		return true
+	end
+
+	function SBM.ImportPerks(importString)
+		if not importString or importString == "" then
+			Talented:Print("Please provide a valid import string.")
+			return
+		end
+		ClearQueue()
+		local changeCount = Talented:QueuePerkImport(importString)
+		if changeCount == 0 then
+			Talented:Print("Perks are already configured correctly.")
+			return
+		end
+		QueueAction(ActionTypes.COMPLETE, {message = "Perk import completed! Made " .. tostring(changeCount) .. " changes."})
+		StartQueue()
+	end
+
+	local buildManagerFrame
+
+	function Talented:CreateSynastriaBuildManagerFrame()
+		if buildManagerFrame then
+			return buildManagerFrame
+		end
+
+		local frame = CreateFrame("Frame", "SBM_BuildManagerFrame", UIParent)
+		frame:SetSize(500, 560)
+		frame:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
+		frame:SetBackdrop({
+			bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+			edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+			tile = true,
+			tileSize = 32,
+			edgeSize = 32,
+			insets = {left = 11, right = 12, top = 12, bottom = 11}
+		})
+		frame:SetBackdropColor(0, 0, 0, 1)
+		frame:SetFrameStrata("FULLSCREEN_DIALOG")
+		frame:SetMovable(true)
+		frame:EnableMouse(true)
+		frame:RegisterForDrag("LeftButton")
+		frame:SetScript("OnDragStart", frame.StartMoving)
+		frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+		frame:Hide()
+
+		local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+		title:SetPoint("TOP", 0, -15)
+		title:SetText("Talented Community Build Export")
+
+		local nameLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		nameLabel:SetPoint("TOPLEFT", 24, -42)
+		nameLabel:SetText("Build Name")
+
+		local nameBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+		nameBox:SetSize(450, 22)
+		nameBox:SetPoint("TOPLEFT", nameLabel, "BOTTOMLEFT", 0, -4)
+		nameBox:SetAutoFocus(false)
+		nameBox:SetMaxLetters(120)
+
+		local descLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		descLabel:SetPoint("TOPLEFT", nameBox, "BOTTOMLEFT", 0, -10)
+		descLabel:SetText("Description")
+
+		local descScroll = CreateFrame("ScrollFrame", nil, frame)
+		descScroll:SetSize(450, 96)
+		descScroll:SetPoint("TOPLEFT", descLabel, "BOTTOMLEFT", 0, -4)
+		local descEditBox = CreateFrame("EditBox", nil, descScroll)
+		descEditBox:SetSize(450, 96)
+		descEditBox:SetPoint("TOPLEFT")
+		descEditBox:SetMultiLine(true)
+		descEditBox:SetFontObject(ChatFontNormal)
+		descEditBox:SetAutoFocus(false)
+		descEditBox:SetMaxLetters(2000)
+		descEditBox:SetScript("OnEscapePressed", function(self)
+			self:ClearFocus()
+			frame:Hide()
+		end)
+		descEditBox:SetScript("OnTextChanged", function(self)
+			local parent = self:GetParent()
+			parent:SetVerticalScroll(parent:GetVerticalScrollRange())
+		end)
+		descScroll:SetScrollChild(descEditBox)
+
+		local descBorder = CreateFrame("Frame", nil, frame)
+		descBorder:SetSize(454, 100)
+		descBorder:SetPoint("CENTER", descScroll, "CENTER")
+		descBorder:SetBackdrop({
+			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			edgeSize = 12,
+			insets = {left = 2, right = 2, top = 2, bottom = 2}
+		})
+		descBorder:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+
+		local categoryLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		categoryLabel:SetPoint("TOPLEFT", descScroll, "BOTTOMLEFT", 0, -10)
+		categoryLabel:SetText("Category")
+
+		local categoryBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+		categoryBox:SetSize(220, 22)
+		categoryBox:SetPoint("TOPLEFT", categoryLabel, "BOTTOMLEFT", 0, -4)
+		categoryBox:SetAutoFocus(false)
+		categoryBox:SetMaxLetters(80)
+		categoryBox:SetTextInsets(8, 8, 0, 0)
+		categoryBox:SetText("Hellfire")
+
+		local subCategoryLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		subCategoryLabel:SetPoint("TOPLEFT", categoryBox, "TOPRIGHT", 14, 0)
+		subCategoryLabel:SetText("SubCategory")
+
+		local subCategoryBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+		subCategoryBox:SetSize(216, 22)
+		subCategoryBox:SetPoint("TOPLEFT", subCategoryLabel, "BOTTOMLEFT", 0, -4)
+		subCategoryBox:SetAutoFocus(false)
+		subCategoryBox:SetMaxLetters(80)
+		subCategoryBox:SetTextInsets(8, 8, 0, 0)
+		subCategoryBox:SetText("Author")
+
+		local iconLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		iconLabel:SetPoint("TOPLEFT", categoryBox, "BOTTOMLEFT", 0, -32)
+		iconLabel:SetText("Guide Icon")
+
+		local iconPreview = CreateFrame("Button", nil, frame)
+		iconPreview:SetSize(26, 26)
+		iconPreview:SetPoint("TOPLEFT", iconLabel, "BOTTOMLEFT", 0, -2)
+		iconPreview:SetFrameLevel(frame:GetFrameLevel() + 15)
+		local iconPreviewTex = iconPreview:CreateTexture(nil, "ARTWORK")
+		iconPreviewTex:SetAllPoints(iconPreview)
+		iconPreviewTex:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+
+		local function UpdateGuideIconPreview(texturePath)
+			if type(texturePath) ~= "string" or texturePath == "" then
+				iconPreviewTex:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+			else
+				iconPreviewTex:SetTexture(texturePath)
+			end
+		end
+
+		local function CollectMacroIcons()
+			local icons = {}
+			local seen = {}
+			local function addIcon(path)
+				if type(path) == "string" and path ~= "" and not seen[path] then
+					seen[path] = true
+					icons[#icons + 1] = path
+				end
+			end
+			addIcon("Interface\\Icons\\INV_Misc_QuestionMark")
+			if type(GetNumMacroIcons) == "function" and type(GetMacroIconInfo) == "function" then
+				local count = GetNumMacroIcons() or 0
+				for i = 1, count do
+					addIcon(GetMacroIconInfo(i))
+				end
+			elseif type(GetMacroIcons) == "function" then
+				local temp = {}
+				GetMacroIcons(temp)
+				for i = 1, #temp do
+					addIcon(temp[i])
+				end
+			end
+			return icons
+		end
+
+		frame.selectedGuideIcon = ""
+		local picker = CreateFrame("Frame", nil, UIParent)
+		picker:SetSize(300, 220)
+		picker:SetPoint("CENTER", frame, "CENTER", 0, -4)
+		picker:SetBackdrop({
+			bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+			edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+			tile = true,
+			tileSize = 32,
+			edgeSize = 24,
+			insets = {left = 8, right = 8, top = 8, bottom = 8}
+		})
+		picker:SetBackdropColor(0, 0, 0, 1)
+		picker:SetFrameStrata("FULLSCREEN_DIALOG")
+		picker:SetFrameLevel(frame:GetFrameLevel() + 40)
+		picker:EnableMouse(true)
+		picker:SetToplevel(true)
+		picker:Hide()
+		picker.icons = CollectMacroIcons()
+		picker.page = 1
+		picker.perPage = 24
+
+		local pickerTitle = picker:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		pickerTitle:SetPoint("TOP", 0, -12)
+		pickerTitle:SetText("Select Guide Icon")
+
+		local function SetPickerNavEnabled(button, enabled)
+			if enabled then
+				if button.Enable then
+					button:Enable()
+				elseif button.SetEnabled then
+					button:SetEnabled(true)
+				end
+			else
+				if button.Disable then
+					button:Disable()
+				elseif button.SetEnabled then
+					button:SetEnabled(false)
+				end
+			end
+		end
+
+		local function RefreshIconPicker()
+			local startIndex = (picker.page - 1) * picker.perPage + 1
+			local totalPages = math.max(1, math.ceil(#picker.icons / picker.perPage))
+			if picker.page > totalPages then
+				picker.page = totalPages
+				startIndex = (picker.page - 1) * picker.perPage + 1
+			end
+			for i = 1, picker.perPage do
+				local btn = picker.buttons[i]
+				local idx = startIndex + i - 1
+				local texturePath = picker.icons[idx]
+				if texturePath then
+					btn.texturePath = texturePath
+					btn.icon:SetTexture(texturePath)
+					btn:Show()
+				else
+					btn.texturePath = nil
+					btn:Hide()
+				end
+			end
+			picker.pageText:SetText(("Page %d/%d"):format(picker.page, totalPages))
+			SetPickerNavEnabled(picker.prevBtn, picker.page > 1)
+			SetPickerNavEnabled(picker.nextBtn, picker.page < totalPages)
+		end
+
+		picker.buttons = {}
+		for i = 1, picker.perPage do
+			local btn = CreateFrame("Button", nil, picker)
+			btn:SetSize(36, 36)
+			local col = bit.band(i - 1, 7)
+			local row = math.floor((i - 1) / 8)
+			btn:SetPoint("TOPLEFT", 18 + col * 34, -34 - row * 38)
+			local icon = btn:CreateTexture(nil, "ARTWORK")
+			icon:SetAllPoints(btn)
+			btn.icon = icon
+			btn:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+			btn:SetScript("OnClick", function(self)
+				if not self.texturePath then
+					return
+				end
+				frame.selectedGuideIcon = self.texturePath
+				UpdateGuideIconPreview(self.texturePath)
+				picker:Hide()
+			end)
+			picker.buttons[i] = btn
+		end
+
+		picker.prevBtn = CreateFrame("Button", nil, picker, "UIPanelButtonTemplate")
+		picker.prevBtn:SetSize(60, 20)
+		picker.prevBtn:SetPoint("BOTTOMLEFT", 14, 12)
+		picker.prevBtn:SetText("Prev")
+		picker.prevBtn:SetScript("OnClick", function()
+			picker.page = picker.page - 1
+			RefreshIconPicker()
+		end)
+		picker.nextBtn = CreateFrame("Button", nil, picker, "UIPanelButtonTemplate")
+		picker.nextBtn:SetSize(60, 20)
+		picker.nextBtn:SetPoint("BOTTOMRIGHT", -14, 12)
+		picker.nextBtn:SetText("Next")
+		picker.nextBtn:SetScript("OnClick", function()
+			picker.page = picker.page + 1
+			RefreshIconPicker()
+		end)
+		picker.pageText = picker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		picker.pageText:SetPoint("BOTTOM", 0, 17)
+
+		local pickIconBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+		pickIconBtn:SetSize(64, 22)
+		pickIconBtn:SetPoint("LEFT", iconPreview, "RIGHT", 6, 0)
+		pickIconBtn:SetFrameLevel(frame:GetFrameLevel() + 15)
+		pickIconBtn:SetText("Pick...")
+		pickIconBtn:SetScript("OnClick", function()
+			picker.page = 1
+			picker.icons = CollectMacroIcons()
+			picker:SetFrameLevel(frame:GetFrameLevel() + 40)
+			RefreshIconPicker()
+			picker:Show()
+		end)
+
+		local payloadLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		payloadLabel:SetPoint("TOPLEFT", iconLabel, "BOTTOMLEFT", 0, -32)
+		payloadLabel:SetText("Payload (talents + perks)")
+
+		local payloadScroll = CreateFrame("ScrollFrame", nil, frame)
+		payloadScroll:SetSize(450, 90)
+		payloadScroll:SetPoint("TOPLEFT", payloadLabel, "BOTTOMLEFT", 0, -4)
+		local payloadEditBox = CreateFrame("EditBox", nil, payloadScroll)
+		payloadEditBox:SetSize(450, 90)
+		payloadEditBox:SetPoint("TOPLEFT")
+		payloadEditBox:SetMultiLine(true)
+		payloadEditBox:SetFontObject(ChatFontNormal)
+		payloadEditBox:SetAutoFocus(false)
+		payloadEditBox:SetScript("OnEscapePressed", function(self)
+			self:ClearFocus()
+			frame:Hide()
+		end)
+		payloadScroll:SetScrollChild(payloadEditBox)
+
+		local payloadBorder = CreateFrame("Frame", nil, frame)
+		payloadBorder:SetSize(454, 94)
+		payloadBorder:SetPoint("CENTER", payloadScroll, "CENTER")
+		payloadBorder:SetBackdrop({
+			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			edgeSize = 12,
+			insets = {left = 2, right = 2, top = 2, bottom = 2}
+		})
+		payloadBorder:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+
+		local communityLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+		communityLabel:SetPoint("TOPLEFT", payloadScroll, "BOTTOMLEFT", 0, -10)
+		communityLabel:SetText("Community Export (SUB2/SUB1)")
+
+		local communityScroll = CreateFrame("ScrollFrame", nil, frame)
+		communityScroll:SetSize(450, 90)
+		communityScroll:SetPoint("TOPLEFT", communityLabel, "BOTTOMLEFT", 0, -4)
+		local communityEditBox = CreateFrame("EditBox", nil, communityScroll)
+		communityEditBox:SetSize(450, 90)
+		communityEditBox:SetPoint("TOPLEFT")
+		communityEditBox:SetMultiLine(true)
+		communityEditBox:SetFontObject(ChatFontNormal)
+		communityEditBox:SetAutoFocus(false)
+		communityEditBox:SetScript("OnEscapePressed", function(self)
+			self:ClearFocus()
+			frame:Hide()
+		end)
+		communityScroll:SetScrollChild(communityEditBox)
+
+		local communityBorder = CreateFrame("Frame", nil, frame)
+		communityBorder:SetSize(454, 94)
+		communityBorder:SetPoint("CENTER", communityScroll, "CENTER")
+		communityBorder:SetBackdrop({
+			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			edgeSize = 12,
+			insets = {left = 2, right = 2, top = 2, bottom = 2}
+		})
+		communityBorder:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+
+		local exportBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+		exportBtn:SetSize(130, 22)
+		exportBtn:SetPoint("BOTTOMLEFT", 24, 18)
+		exportBtn:SetText("Export Both")
+		exportBtn:SetScript("OnClick", function()
+			local name = nameBox:GetText()
+			local description = descEditBox:GetText()
+			local payload = Talented:ExportSynastriaBuildString()
+			if not name or name:gsub("^%s*(.-)%s*$", "%1") == "" then
+				name = Talented:GetCommunitySuggestionName()
+				nameBox:SetText(name)
+			end
+			payloadEditBox:SetText(payload or "")
+			local category = tostring(categoryBox:GetText() or ""):gsub("^%s*(.-)%s*$", "%1")
+			if category == "" then
+				category = "Hellfire"
+				categoryBox:SetText(category)
+			end
+			local subCategory = tostring(subCategoryBox:GetText() or ""):gsub("^%s*(.-)%s*$", "%1")
+			if subCategory == "" then
+				subCategory = "Author"
+				subCategoryBox:SetText(subCategory)
+			end
+			local out = Talented:BuildCommunitySubmissionString(name, description, payload, {
+				category = category,
+				subcategory = subCategory,
+				icon = frame.selectedGuideIcon or ""
+			})
+			communityEditBox:SetText(out or "")
+			communityEditBox:SetFocus()
+			communityEditBox:HighlightText()
+		end)
+
+		local importBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+		importBtn:SetSize(90, 22)
+		importBtn:SetPoint("LEFT", exportBtn, "RIGHT", 8, 0)
+		importBtn:SetText("Import")
+		importBtn:SetScript("OnClick", function()
+			local input = payloadEditBox:GetText()
+			if not input or input == "" then
+				input = communityEditBox:GetText()
+			end
+			Talented:ImportSynastriaBuildString(input or "")
+		end)
+
+		local closeBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+		closeBtn:SetSize(90, 22)
+		closeBtn:SetPoint("BOTTOMRIGHT", -24, 18)
+		closeBtn:SetText("Close")
+		closeBtn:SetScript("OnClick", function()
+			frame:Hide()
+		end)
+		frame.nameBox = nameBox
+		frame.descBox = descEditBox
+		frame.categoryBox = categoryBox
+		frame.subCategoryBox = subCategoryBox
+		frame.payloadEditBox = payloadEditBox
+		frame.communityEditBox = communityEditBox
+		frame.editBox = payloadEditBox
+		buildManagerFrame = frame
+		return frame
+	end
+
+	local function CreateBuildManagerFrame()
+		return Talented:CreateSynastriaBuildManagerFrame()
+	end
+
+	function Talented:ToggleSynastriaBuildManager()
+		local frame = self:CreateSynastriaBuildManagerFrame()
+		if frame:IsShown() then
+			frame:Hide()
+		else
+			if _G.TalentedFrame and _G.TalentedFrame.GetFrameLevel then
+				frame:SetFrameLevel(_G.TalentedFrame:GetFrameLevel() + 30)
+			end
+			frame:Show()
+			if frame.nameBox and (not frame.nameBox:GetText() or frame.nameBox:GetText() == "") then
+				frame.nameBox:SetText(self:GetCommunitySuggestionName())
+			end
+			if frame.categoryBox and (not frame.categoryBox:GetText() or frame.categoryBox:GetText() == "") then
+				frame.categoryBox:SetText("Hellfire")
+			end
+			if frame.subCategoryBox and (not frame.subCategoryBox:GetText() or frame.subCategoryBox:GetText() == "") then
+				frame.subCategoryBox:SetText("Author")
+			end
+			frame.payloadEditBox:SetFocus()
+			frame.payloadEditBox:SetCursorPosition(0)
+		end
+	end
+
+	function Talented:AddPerksToFrame(baseFrame)
+		if not baseFrame then
+			return
+		end
+		baseFrame.perkTab = true
+		if baseFrame.sbmBuildButton then
+			return
+		end
+		local button = CreateFrame("Button", nil, baseFrame, "UIPanelButtonTemplate")
+		button:SetSize(110, 22)
+		button:SetPoint("TOPRIGHT", baseFrame, "TOPRIGHT", -200, -5)
+		button:SetText("Build Manager")
+		button:SetScript("OnClick", function()
+			Talented:ToggleSynastriaBuildManager()
+		end)
+		baseFrame.sbmBuildButton = button
+		if self.uielements then
+			self.uielements[#self.uielements + 1] = button
+		end
+	end
+
+	function Talented:AddSynastriaBuildManagerButton()
+		return
+	end
+
+	local function AddBuildManagerButton()
+		Talented:AddSynastriaBuildManagerButton()
+	end
+
+	function Talented:InitializeSynastriaBuildManagerHook()
+		return
+	end
+
+	_G.GetAllPerks = function()
+		return Talented:GetAllSynastriaPerks()
+	end
+
+	_G.SBM = SBM
+
+	_G.ExportDualClassTalents = function()
+		return Talented:ExportDualClassTalents()
+	end
+
+	_G.ImportDualClassTalents = function(importText)
+		ClearBuildQueue()
+		local ok = Talented:ImportDualClassTalents(importText)
+		if ok then
+			QueueBuildAction(ActionTypes.COMPLETE, {message = "Talent import queued."})
+			StartBuildQueue()
+		end
+		return ok
+	end
 end

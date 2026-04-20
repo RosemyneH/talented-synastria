@@ -362,6 +362,81 @@ do
 		end
 	end
 
+	local function CreateClassIconButton(parent, index)
+		local button = CreateFrame("CheckButton", nil, parent)
+		button:SetSize(32, 32)
+
+		local border = button:CreateTexture(nil, "BACKGROUND")
+		border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+		border:SetAllPoints(button)
+		button.border = border
+
+		local icon = button:CreateTexture(nil, "ARTWORK")
+		icon:SetPoint("TOPLEFT", 3, -3)
+		icon:SetPoint("BOTTOMRIGHT", -3, 3)
+		button.icon = icon
+
+		local highlight = button:CreateTexture(nil, "HIGHLIGHT")
+		highlight:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+		highlight:SetBlendMode("ADD")
+		highlight:SetAllPoints(button)
+		button:SetHighlightTexture(highlight)
+
+		local checked = button:CreateTexture(nil, "OVERLAY")
+		checked:SetTexture("Interface\\Buttons\\CheckButtonHilight")
+		checked:SetBlendMode("ADD")
+		checked:SetAllPoints(button)
+		button:SetCheckedTexture(checked)
+
+		button:SetScript("OnClick", function()
+			Talented:SwitchPlayerClassButton(index)
+		end)
+		button:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			if self.tooltip then
+				GameTooltip:SetText(self.tooltip)
+			end
+			GameTooltip:Show()
+		end)
+		button:SetScript("OnLeave", function()
+			GameTooltip:Hide()
+		end)
+
+		function button:SetClassToken(classToken)
+			self.classToken = classToken
+			self.tooltip = (_G.LOCALIZED_CLASS_NAMES_MALE and _G.LOCALIZED_CLASS_NAMES_MALE[classToken]) or classToken
+			local coords = _G.CLASS_ICON_TCOORDS and _G.CLASS_ICON_TCOORDS[classToken]
+			self.icon:SetTexture("Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes")
+			if coords then
+				self.icon:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+			else
+				self.icon:SetTexCoord(0, 1, 0, 1)
+			end
+		end
+
+		table.insert(Talented.uielements, button)
+		return button
+	end
+
+	local function CreateClassSwitchIcons(parent)
+		local f = CreateFrame("Frame", nil, parent)
+		f:SetPoint("TOPRIGHT", parent, "TOPLEFT", 2, -40)
+		f:SetSize(32, 84)
+
+		local c1 = CreateClassIconButton(f, 1)
+		c1:SetPoint("TOPLEFT")
+		f.class1 = c1
+
+		local c2 = CreateClassIconButton(f, 2)
+		c2:SetPoint("TOP", c1, "BOTTOM", 0, -10)
+		f.class2 = c2
+
+		parent.classSwitchIcons = f
+		parent.bclass1 = c1
+		parent.bclass2 = c2
+		return f
+	end
+
 	local function CloseButton_OnClick(self, button)
 		if button == "LeftButton" then
 			if self.OnClick then
@@ -422,6 +497,7 @@ do
 		table.insert(Talented.uielements, close)
 
 		CreateBaseButtons(frame)
+		CreateClassSwitchIcons(frame)
 
 		UISpecialFrames[#UISpecialFrames + 1] = "TalentedFrame"
 
@@ -430,6 +506,8 @@ do
 			SetButtonPulse(TalentMicroButton, 0, 1)
 			PlaySound "TalentScreenOpen"
 			Talented:UpdateMicroButtons()
+			Talented:HookClassSwitchButtons()
+			Talented:UpdateClassSwitchButtons()
 		end)
 		frame:SetScript("OnHide", function()
 			PlaySound "TalentScreenClose"
@@ -996,7 +1074,7 @@ do
 	end
 
 	local function Menu_IsTemplatePlayerClass()
-		return Talented.template.class == select(2, UnitClass("player"))
+		return Talented:IsPlayerClass(Talented.template.class)
 	end
 
 	local function Menu_NewTemplate(entry, class)
@@ -1027,7 +1105,7 @@ do
 			menu[#menu + 1] = entry
 		end
 
-		if select(2, UnitClass "player") == "HUNTER" then
+		if Talented:IsPlayerClass("HUNTER") then
 			entry = self:GetNamedMenu("petcurrent")
 			entry.text = L["View Pet Spec"]
 			entry.disabled = true
@@ -1227,6 +1305,91 @@ do
 		hideOnEscape = 1
 	}
 
+	StaticPopupDialogs["TALENTED_IMPORT_SHARABLE"] = {
+		text = "Paste Synastria Sharable String:",
+		button1 = ACCEPT,
+		button2 = CANCEL,
+		hasEditBox = 1,
+		hasWideEditBox = 1,
+		maxLetters = 4096,
+		whileDead = 1,
+		OnShow = function(self)
+			self.wideEditBox:SetText("")
+		end,
+		OnAccept = function(self)
+			local payload = self.wideEditBox:GetText()
+			self:Hide()
+			if type(Talented.ImportSynastriaBuildString) == "function" then
+				Talented:ImportSynastriaBuildString(payload)
+			end
+		end,
+		timeout = 0,
+		EditBoxOnEnterPressed = StaticPopupDialogs.TALENTED_IMPORT_URL.EditBoxOnEnterPressed,
+		EditBoxOnEscapePressed = StaticPopupDialogs.TALENTED_IMPORT_URL.EditBoxOnEscapePressed,
+		hideOnEscape = 1
+	}
+
+	StaticPopupDialogs["TALENTED_EXPORT_SUBMISSION"] = {
+		text = "Enter preset info:\nBuild Name:\nBuild Description:\nGuide (how to play):",
+		button1 = ACCEPT,
+		button2 = CANCEL,
+		hasEditBox = 1,
+		hasWideEditBox = 1,
+		maxLetters = 4096,
+		whileDead = 1,
+		OnShow = function(self)
+			local templateName = (type(Talented.GetCommunitySuggestionName) == "function" and Talented:GetCommunitySuggestionName()) or ((Talented.template and Talented.template.name) or "Shared Preset")
+			self.wideEditBox:SetText(
+				"Build Name: " .. templateName .. "\n" ..
+				"Build Description: \n" ..
+				"Guide: "
+			)
+		end,
+		OnAccept = function(self)
+			local input = self.wideEditBox:GetText() or ""
+			self:Hide()
+			local name = input:match("[Bb]uild%s*[Nn]ame%s*:%s*([^\r\n]+)")
+			local description = input:match("[Bb]uild%s*[Dd]escription%s*:%s*([^\r\n]+)")
+			local guide = ""
+			local _, guideStart = input:find("[Gg]uide%s*:%s*")
+			if guideStart then
+				guide = input:sub(guideStart + 1):gsub("^%s*(.-)%s*$", "%1")
+			end
+			if (not name or name == "") and input:find("|", 1, true) then
+				local legacyName, legacyDescription = input:match("^%s*(.-)%s*|%s*(.-)%s*$")
+				name = legacyName
+				description = legacyDescription
+			end
+			if not name or name == "" then
+				name = (type(Talented.GetCommunitySuggestionName) == "function" and Talented:GetCommunitySuggestionName()) or ((Talented.template and Talented.template.name) or "Shared Preset")
+			end
+			description = description or ""
+			if guide ~= "" then
+				if description ~= "" then
+					description = description .. " | Guide: " .. guide
+				else
+					description = "Guide: " .. guide
+				end
+			end
+			if type(Talented.ExportCommunitySubmission) ~= "function" then
+				return
+			end
+			local payload = Talented:ExportCommunitySubmission(name, description)
+			if not payload or payload == "" then
+				return
+			end
+			if Talented.db.profile.show_url_in_chat then
+				Talented:WriteToChat(payload)
+			else
+				Talented:ShowInDialog(payload)
+			end
+		end,
+		timeout = 0,
+		EditBoxOnEnterPressed = StaticPopupDialogs.TALENTED_IMPORT_URL.EditBoxOnEnterPressed,
+		EditBoxOnEscapePressed = StaticPopupDialogs.TALENTED_IMPORT_URL.EditBoxOnEscapePressed,
+		hideOnEscape = 1
+	}
+
 	function Talented:CreateActionMenu()
 		local menu = self:GetNamedMenu("Action")
 
@@ -1308,10 +1471,27 @@ do
 
 		menu[#menu + 1] = self:GetNamedMenu("separator")
 		menu[#menu + 1] = {
-			text = L["Import template ..."],
+			text = "Import Sharable String ...",
 			func = function()
-				StaticPopup_Show "TALENTED_IMPORT_URL"
+				StaticPopup_Show "TALENTED_IMPORT_SHARABLE"
 			end
+		}
+
+		menu[#menu + 1] = {
+			text = "Export Community Submission ...",
+			func = function()
+				if type(Talented.ToggleSynastriaBuildManager) == "function" then
+					Talented:ToggleSynastriaBuildManager()
+				else
+					StaticPopup_Show "TALENTED_EXPORT_SUBMISSION"
+				end
+			end
+		}
+
+		menu[#menu + 1] = {
+			text = L["Community Builds"],
+			hasArrow = true,
+			menuList = self:GetNamedMenu("communityBuilds")
 		}
 
 		menu[#menu + 1] = {
@@ -1351,10 +1531,25 @@ do
 		end
 	end
 
+	local function Export_SharableString()
+		if type(Talented.ExportSynastriaBuildString) ~= "function" then
+			return
+		end
+		local payload = Talented:ExportSynastriaBuildString()
+		if not payload or payload == "" then
+			return
+		end
+		if Talented.db.profile.show_url_in_chat then
+			Talented:WriteToChat(payload)
+		else
+			Talented:ShowInDialog(payload)
+		end
+	end
+
 	function Talented:MakeActionMenu()
 		local menu = self:CreateActionMenu()
 		local templateTalentGroup, activeTalentGroup = self.template.talentGroup, GetActiveTalentGroup()
-		local restricted = (self.template.class ~= select(2, UnitClass("player")))
+		local restricted = not self:IsPlayerClass(self.template.class)
 		local pet_restricted = not self.GetPetClass or self:GetPetClass() ~= self.template.class
 		local targetName
 		if not restricted then
@@ -1392,15 +1587,175 @@ do
 
 		local exporters = self:GetNamedMenu("exporters")
 		local index = 1
-		for name, handler in pairs(self.exporters) do
-			exporters[index] = exporters[index] or {}
-			exporters[index].text = name
-			exporters[index].func = Export_Template
-			exporters[index].arg1 = handler
-			index = index + 1
-		end
+		exporters[index] = exporters[index] or {}
+		exporters[index].text = "Sharable String"
+		exporters[index].func = Export_SharableString
+		exporters[index].arg1 = nil
+		index = index + 1
 		for i = index, #exporters do
 			exporters[i].text = nil
+			exporters[i].func = nil
+			exporters[i].arg1 = nil
+		end
+
+		local classBuilds
+		if type(self.GetCommunityBuildsForCurrentMask) == "function" then
+			classBuilds = self:GetCommunityBuildsForCurrentMask(self.template.class)
+		else
+			classBuilds = self:GetCommunityBuildsForClass(self.template.class)
+		end
+		local communityBuilds = self:GetNamedMenu("communityBuilds")
+		if #classBuilds == 0 then
+			communityBuilds[1] = communityBuilds[1] or {}
+			communityBuilds[1].text = L["No community builds configured yet."]
+			communityBuilds[1].disabled = true
+			communityBuilds[1].func = nil
+			communityBuilds[1].arg1 = nil
+			for i = 2, #communityBuilds do
+				communityBuilds[i].text = nil
+			end
+		else
+			local grouped = {}
+			local rootOrder = {}
+			local function ensureGroup(rootName, subName)
+				if not grouped[rootName] then
+					grouped[rootName] = {subs = {}, order = {}}
+					rootOrder[#rootOrder + 1] = rootName
+				end
+				local root = grouped[rootName]
+				if not root.subs[subName] then
+					root.subs[subName] = {}
+					root.order[#root.order + 1] = subName
+				end
+				return root.subs[subName]
+			end
+			local function trimText(value, fallback)
+				value = tostring(value or ""):gsub("^%s*(.-)%s*$", "%1")
+				if value == "" then
+					return fallback
+				end
+				return value
+			end
+			for i, build in ipairs(classBuilds) do
+				local buildName = build.name
+				local buildUrl = build.url
+				local buildDescription = build.description
+				local buildCategory = build.category
+				local buildSubCategory = build.subcategory or build.spec
+				local buildIcon = build.icon
+				if type(Talented.ParseCommunitySubmissionString) == "function" and type(buildUrl) == "string" then
+					local meta = Talented:ParseCommunitySubmissionString(buildUrl)
+					if meta then
+						if (not buildName or buildName == "") and meta.name and meta.name ~= "" then
+							buildName = meta.name
+						end
+						if (not buildDescription or buildDescription == "") and meta.description and meta.description ~= "" then
+							buildDescription = meta.description
+						end
+						if (not buildCategory or buildCategory == "") and meta.category and meta.category ~= "" then
+							buildCategory = meta.category
+						end
+						if (not buildSubCategory or buildSubCategory == "") and meta.subcategory and meta.subcategory ~= "" then
+							buildSubCategory = meta.subcategory
+						end
+						if (not buildIcon or buildIcon == "") and meta.icon and meta.icon ~= "" then
+							buildIcon = meta.icon
+						end
+					end
+				end
+				local rootCategory = trimText(buildCategory, "Spec")
+				local subCategory = trimText(buildSubCategory, "Specs")
+				local subList = ensureGroup(rootCategory, subCategory)
+				subList[#subList + 1] = {
+					name = buildName or (self.template.class .. " Build " .. i),
+					url = buildUrl,
+					description = buildDescription,
+					icon = buildIcon
+				}
+			end
+
+			table.sort(rootOrder)
+			local rootIndex = 1
+			for _, rootName in ipairs(rootOrder) do
+				local rootData = grouped[rootName]
+				table.sort(rootData.order)
+				local rootEntry = communityBuilds[rootIndex] or {}
+				rootEntry.text = rootName
+				rootEntry.hasArrow = true
+				rootEntry.notCheckable = true
+				rootEntry.disabled = false
+				rootEntry.tooltipTitle = rootName
+				rootEntry.tooltipText = "Browse build categories"
+				rootEntry.menuList = rootEntry.menuList or {}
+				local subMenu = rootEntry.menuList
+				local subIndex = 1
+
+				for _, subName in ipairs(rootData.order) do
+					local builds = rootData.subs[subName]
+					local subEntry = subMenu[subIndex] or {}
+					subEntry.text = subName
+					subEntry.hasArrow = true
+					subEntry.notCheckable = true
+					subEntry.disabled = false
+					subEntry.tooltipTitle = subName
+					subEntry.tooltipText = "Hover a build for details"
+					subEntry.menuList = subEntry.menuList or {}
+					local buildMenu = subEntry.menuList
+					for j, data in ipairs(builds) do
+						buildMenu[j] = buildMenu[j] or {}
+						local iconPrefix = (data.icon and data.icon ~= "") and ("|T" .. data.icon .. ":14|t ") or ""
+						buildMenu[j].text = iconPrefix .. data.name
+						buildMenu[j].disabled = not data.url
+						buildMenu[j].tooltipTitle = data.name
+						buildMenu[j].tooltipText = (data.description and data.description ~= "") and data.description or "Click to import this build."
+						buildMenu[j].func = function(_, url, importName)
+							if not url or url == "" then
+								return
+							end
+							if type(Talented.ImportSynastriaBuildString) == "function" then
+								local looksLikeShareString = (not url:find("://", 1, true)) and (url:find(",", 1, true) or url:find("PERKS", 1, true))
+								if looksLikeShareString then
+									Talented:ImportSynastriaBuildString(url)
+									return
+								end
+							end
+							local imported = Talented:ImportTemplate(url)
+							if imported then
+								if importName and importName ~= "" then
+									Talented:UpdateTemplateName(imported, importName)
+								end
+								Talented:OpenTemplate(imported)
+							end
+						end
+						buildMenu[j].arg1 = data.url
+						buildMenu[j].arg2 = data.name
+					end
+					for j = #builds + 1, #buildMenu do
+						buildMenu[j].text = nil
+						buildMenu[j].func = nil
+						buildMenu[j].arg1 = nil
+						buildMenu[j].arg2 = nil
+					end
+					subMenu[subIndex] = subEntry
+					subIndex = subIndex + 1
+				end
+
+				for j = subIndex, #subMenu do
+					subMenu[j].text = nil
+					subMenu[j].func = nil
+					subMenu[j].arg1 = nil
+					subMenu[j].arg2 = nil
+				end
+				communityBuilds[rootIndex] = rootEntry
+				rootIndex = rootIndex + 1
+			end
+
+			for i = rootIndex, #communityBuilds do
+				communityBuilds[i].text = nil
+				communityBuilds[i].func = nil
+				communityBuilds[i].arg1 = nil
+				communityBuilds[i].arg2 = nil
+			end
 		end
 
 		return menu
@@ -1528,85 +1883,16 @@ do
 		return info
 	end
 
-	-- Custom rename dialog for Talented
-	local function CreateRenameSpecDialog()
-		StaticPopupDialogs["TALENTED_RENAME_SPEC"] = {
-			text = "Enter a new name for this spec:",
-			button1 = ACCEPT,
-			button2 = CANCEL,
-			hasEditBox = 1,
-			maxLetters = 32,
-			whileDead = 1,
-			hideOnEscape = 1,
-			timeout = 0,
-			exclusive = 1,
-			OnAccept = function(self)
-				local newName = self.editBox:GetText()
-				local talentGroup = self.data
-				if newName and newName ~= "" and talentGroup then
-					-- Use the server's function if available
-					if SetCustomGameDataString then
-						SetCustomGameDataString(21, talentGroup, newName)
-					end
-					-- Store locally as backup
-					Talented.db.profile.specNames = Talented.db.profile.specNames or {}
-					Talented.db.profile.specNames[talentGroup] = newName
-					
-					-- Update the UI
-					if Talented.tabs then
-						Talented.tabs:Update()
-					end
-					-- Update any open Talented frames
-					if Talented.base and Talented.base:IsShown() then
-						Talented:UpdateView()
-					end
-				end
-			end,
-			OnShow = function(self)
-				local talentGroup = self.data
-				if talentGroup then
-					local currentName = Talented:GetTalentGroupName(talentGroup)
-					self.editBox:SetText(currentName)
-					self.editBox:HighlightText()
-					self.editBox:SetFocus()
-				end
-			end,
-			EditBoxOnEnterPressed = function(self)
-				local parent = self:GetParent()
-				if parent.button1:IsEnabled() then
-					StaticPopupDialogs[parent.which].OnAccept(parent)
-					parent:Hide()
-				end
-			end,
-			EditBoxOnEscapePressed = function(self)
-				self:GetParent():Hide()
-			end
-		}
-	end
-	
-	-- Call this to create the dialog
-	CreateRenameSpecDialog()
-
 	local function TabFrame_OnEnter(self)
 		local info = specs[self.type]
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		
-		-- Use the custom name from GetTalentGroupName
-		local tooltipText = info.tooltip
-		if info.talentGroup then
-			tooltipText = Talented:GetTalentGroupName(info.talentGroup)
-		end
-		
-		GameTooltip:AddLine(tooltipText)
+		GameTooltip:AddLine(info.tooltip)
 		for index, cache in ipairs(info.cache) do
 			local color = info.primary == index and GREEN_FONT_COLOR or HIGHLIGHT_FONT_COLOR
 			GameTooltip:AddDoubleLine(cache.name, cache.points, HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b, color.r, color.g, color.b, 1)
 		end
-		if not info.pet then
-			if not self:GetChecked() then
-				GameTooltip:AddLine("Right-click to activate this spec", GREEN_FONT_COLOR.r, GREEN_FONT_COLOR.g, GREEN_FONT_COLOR.b, 1)
-			end
-			GameTooltip:AddLine("Alt+Left-click to rename this spec", GREEN_FONT_COLOR.r, GREEN_FONT_COLOR.g, GREEN_FONT_COLOR.b, 1)
+		if not info.pet and not self:GetChecked() then
+			GameTooltip:AddLine(L["Right-click to activate this spec"], GREEN_FONT_COLOR.r, GREEN_FONT_COLOR.g, GREEN_FONT_COLOR.b, 1)
 		end
 		GameTooltip:Show()
 	end
@@ -1624,24 +1910,12 @@ do
 
 	local function TabFrame_OnClick(self, button)
 		local info = specs[self.type]
-		
-		-- ALT + Left click = Rename (use our custom dialog)
-		if button == "LeftButton" and IsAltKeyDown() and info.talentGroup and not info.pet then
-			local dialog = StaticPopup_Show("TALENTED_RENAME_SPEC")
-			if dialog then
-				dialog.data = info.talentGroup
-			end
-			return
-		end
-		
-		-- Right click = Activate spec
 		if button == "RightButton" then
 			if not info.pet and not InCombatLockdown() then
 				SetActiveTalentGroup(info.talentGroup)
 				Tabs_UpdateCheck(self:GetParent(), Talented.alternates[info.talentGroup])
 			end
 		else
-			-- Normal left click = Open template
 			local template
 			if info.pet then
 				template = Talented.pet_current

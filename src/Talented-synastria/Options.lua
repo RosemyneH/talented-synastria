@@ -5,7 +5,7 @@ Talented.max_talent_points = 71
 
 Talented.defaults = {
 	profile = {
-		confirmlearn = true,
+		confirmlearn = false,
 		level_cap = true,
 		show_level_req = true,
 		offset = 48,
@@ -13,9 +13,13 @@ Talented.defaults = {
 		add_bottom_offset = true,
 		framepos = {},
 		glyph_on_talent_swap = "active",
-		restore_bars = false
+		restore_bars = false,
+		debug_classswitch = false
 	},
-	global = {templates = {}},
+	global = {
+		templates = {},
+		communityBuilds = {}
+	},
 	char = {targets = {}}
 }
 
@@ -199,6 +203,10 @@ function Talented:UpgradeOptions()
 	if c.target then
 		c.targets[1] = c.target
 		c.target = nil
+	end
+	local g = self.db.global
+	if not g.communityBuilds then
+		g.communityBuilds = {}
 	end
 	self.UpgradeOptions = nil
 end
