@@ -780,7 +780,7 @@ do
 		return nil
 	end
 
-	local function BuildMatchesCurrentClassMask(self, build, className)
+	local function BuildMatchesCurrentClassMask(self, build, sourceClassName)
 		if type(build) ~= "table" then
 			return false
 		end
@@ -843,7 +843,7 @@ do
 			end
 		end
 
-		return className and currentClasses[className] or false
+		return sourceClassName and currentClasses[sourceClassName] or false
 	end
 
 	function Talented:GetCommunityBuildsForCurrentMask(className)
@@ -851,11 +851,11 @@ do
 		local output = {}
 		local seen = {}
 
-		local function addBuild(build)
+		local function addBuild(build, sourceClassName)
 			if type(build) ~= "table" then
 				return
 			end
-			if not BuildMatchesCurrentClassMask(self, build, className) then
+			if not BuildMatchesCurrentClassMask(self, build, sourceClassName) then
 				return
 			end
 			local key = tostring(build.name or "") .. "||" .. tostring(build.url or "")
@@ -866,28 +866,28 @@ do
 			output[#output + 1] = build
 		end
 
-		local function collectBuildsFromContainer(container)
+		local function collectBuildsFromContainer(container, sourceClassName)
 			if type(container) ~= "table" then
 				return
 			end
 			local hasArray = (#container > 0)
 			if hasArray then
 				for _, raw in ipairs(container) do
-					addBuild(NormalizeCommunityBuild(raw))
+					addBuild(NormalizeCommunityBuild(raw), sourceClassName)
 				end
 			end
 			for key, raw in pairs(container) do
 				if type(key) ~= "number" then
-					addBuild(NormalizeCommunityBuild(raw, key))
+					addBuild(NormalizeCommunityBuild(raw, key), sourceClassName)
 				end
 			end
 		end
 
-		collectBuildsFromContainer(self:GetCommunityBuildsForClass(className))
+		collectBuildsFromContainer(self:GetCommunityBuildsForClass(className), className)
 
 		for key, builds in pairs(self.communityBuildCatalog) do
 			if key ~= className then
-				collectBuildsFromContainer(builds)
+				collectBuildsFromContainer(builds, key)
 			end
 		end
 
