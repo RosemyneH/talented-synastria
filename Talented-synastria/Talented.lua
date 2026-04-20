@@ -25,6 +25,53 @@ function Talented:GetClassIdByName(className)
 	return CLASS_ID_BY_NAME[className]
 end
 
+function Talented:IsSynastriaDataReady()
+	if type(GetCustomGameData) ~= "function" then
+		return true
+	end
+	local ok, value = pcall(GetCustomGameData, 41, 0)
+	return ok and (tonumber(value) or 0) ~= 0
+end
+
+function Talented:SafeInvokeWhenReady(fnName)
+	if type(SynastriaSafeInvoke) == "function" then
+		SynastriaSafeInvoke(fnName)
+		return true
+	end
+	return false
+end
+
+function Talented:RunDeferredSynastriaInit()
+	if self:IsCustomTalentEnvironment() and not self:IsSynastriaDataReady() then
+		return
+	end
+	self:MigrateSpecNames()
+	self:UpdatePlayerSpecs()
+	if self.base and self.base.perkTab then
+		self:AddPerksToFrame(self.base)
+	end
+end
+
+function Talented:QueueDeferredSynastriaInit()
+	if not self:IsCustomTalentEnvironment() then
+		self:RunDeferredSynastriaInit()
+		return
+	end
+	if self:IsSynastriaDataReady() then
+		self:RunDeferredSynastriaInit()
+		return
+	end
+	_G.Talented_SafeDeferredInit = function()
+		if _G.Talented and _G.Talented.RunDeferredSynastriaInit then
+			_G.Talented:RunDeferredSynastriaInit()
+		end
+	end
+	if not self:SafeInvokeWhenReady("Talented_SafeDeferredInit") then
+		-- Fallback if the server helper is unavailable for any reason.
+		self:RunDeferredSynastriaInit()
+	end
+end
+
 function Talented:GetCurrentClassFromTalentTabs()
 	if not self.tabdata then
 		return nil
@@ -722,6 +769,7 @@ end
 function Talented:GetCommunityBuildsForClass(className)
 	self.communityBuildCatalog = self.communityBuildCatalog or {}
 	self.communityBuildCatalog.WITCH = self.communityBuildCatalog.WITCH or {}
+	self.communityBuildCatalog.BARBARIAN = self.communityBuildCatalog.BARBARIAN or {}
 
 	local function ensureBuild(list, build)
 		for i = 1, #list do
@@ -749,6 +797,16 @@ function Talented:GetCommunityBuildsForClass(className)
 		url = "SUB2,\"Witch\",\"Burn em foes\",\"Hellfire\",\"Author\",\"Interface\\Icons\\ABILITY_MAGE_MOLTENARMOR\",\"WARLOCK,pZAoDmbrAF3aZ53mfC0nr,DRUID,0000000aZ000a,PERKS,P27711W1B2J1424Lo3kLT1b2_3p9Y31141B1312\"",
 		baseClass = "WITCH",
 		classes = "WARLOCK,DRUID"
+	})
+	ensureBuild(self.communityBuildCatalog.BARBARIAN, {
+		name = "Bladestorm to Win!",
+		description = "Bladestorm then Execute!",
+		category = "Prestige",
+		subcategory = "Qt",
+		icon = "Interface\\Icons\\Ability_Whirlwind",
+		url = "SUB2,\"Bladestorm to Win!\",\"Bladestorm then Execute!\",\"Prestige\",\"Qt\",\"Interface\\Icons\\Ability_Whirlwind\",\"WARRIOR,M5Am1Dpu0AAc1onFamZAmt0t,DRUID,0Z5Aod3C1Dwcpm1rbAr01,PERKS,P2A132H933B2AK7x2b1hM1b2wAb3111CMY21121\"",
+		baseClass = "BARBARIAN",
+		classes = "WARRIOR,DRUID"
 	})
 
 	self.communityBuildCatalog[className] = self.communityBuildCatalog[className] or {}
@@ -1382,11 +1440,7 @@ do
 			self:PrimeNativeClassButtons(false)
 			self:ScheduleInitialClassSync()
 		end
-		self:MigrateSpecNames()
-		self:UpdatePlayerSpecs()
-		if self.base and self.base.perkTab then
-			self:AddPerksToFrame(self.base)
-		end
+		self:QueueDeferredSynastriaInit()
 	end
 
 	function Talented:PLAYER_TALENT_UPDATE()
@@ -1603,7 +1657,7 @@ do
 		self:Debug("UNCOMPRESS CLASSDATA", class)
 		data = handle_tabs(strsplit("|", data))
 		self.spelldata[class] = data
-		if class == self:GetCurrentPlayerClass() and self.CheckSpellData then
+		if class == self:GetCurrentPlayerClass() and self.CheckSpellData and ((not self:IsCustomTalentEnvironment()) or self:IsSynastriaDataReady()) then
 			self:CheckSpellData(class)
 		end
 		return data
@@ -3995,6 +4049,9 @@ do
 	end
 
 	local function GetClassIndex(self, className)
+		if self.classIndexOverrides and self.classIndexOverrides[className] then
+			return self.classIndexOverrides[className]
+		end
 		for index, name in ipairs(self:GetPlayerClasses()) do
 			if name == className then
 				return index
@@ -4033,13 +4090,31 @@ do
 		if not indexToUse then
 			return false
 		end
+		local classes = self:GetPlayerClasses()
+		local classCount = #classes
 		for _ = 1, 2 do
 			self.manualClassIndex = indexToUse
 			self.manualPlayerClass = className
 			self:TryServerClassSwitch(indexToUse, className)
 			self:SetManualPlayerClass(className)
 			if IsLiveTalentFrameClass(self, className) then
+				self.classIndexOverrides = self.classIndexOverrides or {}
+				self.classIndexOverrides[className] = indexToUse
 				return true
+			end
+		end
+		if classCount >= 2 then
+			local alternateIndex = (indexToUse == 1) and 2 or 1
+			for _ = 1, 2 do
+				self.manualClassIndex = alternateIndex
+				self.manualPlayerClass = className
+				self:TryServerClassSwitch(alternateIndex, className)
+				self:SetManualPlayerClass(className)
+				if IsLiveTalentFrameClass(self, className) then
+					self.classIndexOverrides = self.classIndexOverrides or {}
+					self.classIndexOverrides[className] = alternateIndex
+					return true
+				end
 			end
 		end
 		return false
