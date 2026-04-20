@@ -1353,6 +1353,28 @@ do
 		UIParent:RegisterEvent("CONFIRM_TALENT_WIPE")
 	end
 
+	function Talented:MigrateSpecNames()
+		-- Keep server-defined names in local profile for session persistence.
+		if not self.db or not self.db.profile then
+			return
+		end
+
+		local profile = self.db.profile
+		profile.specNames = profile.specNames or {}
+		if not GetCustomGameDataString then
+			return
+		end
+
+		for talentGroup = 1, 6 do
+			if not profile.specNames[talentGroup] then
+				local serverName = GetCustomGameDataString(21, talentGroup)
+				if serverName and serverName ~= "" then
+					profile.specNames[talentGroup] = serverName
+				end
+			end
+		end
+	end
+
 	function Talented:PLAYER_ENTERING_WORLD()
 		-- Update player specs and perk menu
 		if self:IsCustomTalentEnvironment() then
@@ -1360,6 +1382,7 @@ do
 			self:PrimeNativeClassButtons(false)
 			self:ScheduleInitialClassSync()
 		end
+		self:MigrateSpecNames()
 		self:UpdatePlayerSpecs()
 		if self.base and self.base.perkTab then
 			self:AddPerksToFrame(self.base)
@@ -2297,6 +2320,21 @@ do
 end
 
 function Talented:GetTalentGroupName(talentGroup)
+	if self.db and self.db.profile then
+		self.db.profile.specNames = self.db.profile.specNames or {}
+		local savedName = self.db.profile.specNames[talentGroup]
+		if savedName and savedName ~= "" then
+			return savedName
+		end
+		if GetCustomGameDataString then
+			local serverName = GetCustomGameDataString(21, talentGroup)
+			if serverName and serverName ~= "" then
+				self.db.profile.specNames[talentGroup] = serverName
+				return serverName
+			end
+		end
+	end
+
 	if talentGroup == 1 then
 		return TALENT_SPEC_PRIMARY
 	elseif talentGroup == 2 then
@@ -4244,37 +4282,42 @@ do
 			return false
 		end
 
-		local count = 0
-		for tab, tree in ipairs(self:UncompressSpellData(template.class)) do
+		local pointsNeeded = 0
+		local tabInfo = self:UncompressSpellData(template.class)
+		for tab, tree in ipairs(tabInfo) do
+			local ttab = template[tab]
 			for index = 1, #tree do
-				local currentRank = select(5, GetTalentInfo(tab, index, nil, false, group)) or 0
-				local delta = (template[tab][index] or 0) - currentRank
-				if delta > 0 then
-					count = count + delta
-				end
-			end
-		end
-		if count <= 0 then
-			return true
-		end
-		local available = GetUnspentTalentPoints(nil, false, group) or 0
-		if count > available then
-			-- In custom multiclass environments, available points can briefly report
-			-- from the previous class right after a class switch; don't hard-fail early.
-			if not self:IsCustomTalentEnvironment() then
-				self:Print("Not enough points to apply %s spec %d (need %d).", template.class, group, count)
-				return false
+				pointsNeeded = pointsNeeded + ((ttab and ttab[index]) or 0)
 			end
 		end
 
 		local oldPreview = GetCVar("previewTalents")
 		SetCVar("previewTalents", "1")
 		ResetGroupPreviewTalentPoints(false, group)
-		local cp = GetUnspentTalentPoints(nil, false, group) or 0
+
+		-- Clear current build to ensure import is an exact match for this class/spec.
+		for tab, tree in ipairs(tabInfo) do
+			for index = 1, #tree do
+				local committedRank = select(5, GetTalentInfo(tab, index, nil, false, group)) or 0
+				if committedRank > 0 then
+					AddPreviewTalentPoints(tab, index, -committedRank, false, group)
+				end
+			end
+		end
+
+		local availableAfterClear = GetUnspentTalentPoints(nil, false, group) or 0
+		if pointsNeeded > availableAfterClear and not self:IsCustomTalentEnvironment() then
+			self:Print("Not enough points to apply %s spec %d (need %d).", template.class, group, pointsNeeded)
+			SetCVar("previewTalents", oldPreview)
+			ResetGroupPreviewTalentPoints(false, group)
+			return false
+		end
+
+		local cp = availableAfterClear
 		local loopGuard = 0
 		while true do
 			local missing, set = false, false
-			for tab, tree in ipairs(self:UncompressSpellData(template.class)) do
+			for tab, tree in ipairs(tabInfo) do
 				local ttab = template[tab]
 				for index = 1, #tree do
 					local rank = select(9, GetTalentInfo(tab, index, nil, false, group)) or 0
@@ -4288,7 +4331,7 @@ do
 						elseif newRank > rank then
 							set = true
 						end
-						cp = cp - newRank + rank
+						cp = cp - (newRank - rank)
 					end
 				end
 			end

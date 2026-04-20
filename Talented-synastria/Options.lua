@@ -14,6 +14,7 @@ Talented.defaults = {
 		framepos = {},
 		glyph_on_talent_swap = "active",
 		restore_bars = false,
+		specNames = {},
 		debug_classswitch = false
 	},
 	global = {
