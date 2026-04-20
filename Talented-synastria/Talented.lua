@@ -770,6 +770,7 @@ function Talented:GetCommunityBuildsForClass(className)
 	self.communityBuildCatalog = self.communityBuildCatalog or {}
 	self.communityBuildCatalog.WITCH = self.communityBuildCatalog.WITCH or {}
 	self.communityBuildCatalog.BARBARIAN = self.communityBuildCatalog.BARBARIAN or {}
+	self.communityBuildCatalog.ROGUE = self.communityBuildCatalog.ROGUE or {}
 
 	local function ensureBuild(list, build)
 		for i = 1, #list do
@@ -788,25 +789,45 @@ function Talented:GetCommunityBuildsForClass(className)
 		baseClass = "WITCH",
 		classes = "WARLOCK,DRUID"
 	})
-	ensureBuild(self.communityBuildCatalog.WITCH, {
-		name = "Witch",
-		description = "Burn em foes",
-		category = "Hellfire",
-		subcategory = "Qt",
-		icon = "Interface\\Icons\\ABILITY_MAGE_MOLTENARMOR",
-		url = "SUB2,\"Witch\",\"Burn em foes\",\"Hellfire\",\"Author\",\"Interface\\Icons\\ABILITY_MAGE_MOLTENARMOR\",\"WARLOCK,pZAoDmbrAF3aZ53mfC0nr,DRUID,0000000aZ000a,PERKS,P27711W1B2J1424Lo3kLT1b2_3p9Y31141B1312\"",
-		baseClass = "WITCH",
-		classes = "WARLOCK,DRUID"
-	})
 	ensureBuild(self.communityBuildCatalog.BARBARIAN, {
 		name = "Bladestorm to Win!",
 		description = "Bladestorm then Execute!",
 		category = "Prestige",
-		subcategory = "Qt",
+		subcategory = "Lulleh",
 		icon = "Interface\\Icons\\Ability_Whirlwind",
 		url = "SUB2,\"Bladestorm to Win!\",\"Bladestorm then Execute!\",\"Prestige\",\"Qt\",\"Interface\\Icons\\Ability_Whirlwind\",\"WARRIOR,M5Am1Dpu0AAc1onFamZAmt0t,DRUID,0Z5Aod3C1Dwcpm1rbAr01,PERKS,P2A132H933B2AK7x2b1hM1b2wAb3111CMY21121\"",
 		baseClass = "BARBARIAN",
 		classes = "WARRIOR,DRUID"
+	})
+	ensureBuild(self.communityBuildCatalog.ROGUE, {
+		name = "Turret Sin",
+		description = "",
+		category = "Turret",
+		subcategory = "Fappable",
+		icon = "Interface\\Icons\\Spell_Fire_BlueFlameBreath",
+		url = "SUB2,\"Turret Sin\",\"\",\"Turret\",\"Fappable\",\"Interface\\Icons\\Spell_Fire_BlueFlameBreath\",\"ROGUE,D0wA0wva5A3pm5a2vmB0D,PERKS,P24151311Q6B2AK7Eo3hM1Y1r11111XB\"",
+		baseClass = "ROGUE",
+		classes = "ROGUE"
+	})
+	ensureBuild(self.communityBuildCatalog.ROGUE, {
+		name = "Shadowclone Rogue",
+		description = "",
+		category = "Subtlety",
+		subcategory = "Qt",
+		icon = "Interface\\Icons\\Ability_Rogue_ShadowDance",
+		url = "SUB2,\"Shadowclone Rogue\",\"\",\"Subtlety\",\"Qt\",\"Interface\\Icons\\Ability_Rogue_ShadowDance\",\"ROGUE,Dmw0atmZZDA3AmoBBrb51cu,PERKS,P241542372KB2AK43_3P112m2_I1yDp3\"",
+		baseClass = "ROGUE",
+		classes = "ROGUE"
+	})
+	ensureBuild(self.communityBuildCatalog.ROGUE, {
+		name = "Combat CP Evis",
+		description = "",
+		category = "Combat",
+		subcategory = "Scoots",
+		icon = "Interface\\Icons\\Ability_rogue_eviscerate",
+		url = "SUB2,\"Combat CP Evis\",\"\",\"Combat\",\"Scoots\",\"Interface\\Icons\\Ability_rogue_eviscerate\",\"ROGUE,DmZ2vmB03tf2nAtcuDADAm,PERKS,P232541BMB2AB97W4J13qL1h22lB\"",
+		baseClass = "ROGUE",
+		classes = "ROGUE"
 	})
 
 	self.communityBuildCatalog[className] = self.communityBuildCatalog[className] or {}
@@ -4971,7 +4992,7 @@ do
 		end
 
 		local frame = CreateFrame("Frame", "SBM_BuildManagerFrame", UIParent)
-		frame:SetSize(500, 560)
+		frame:SetSize(500, 640)
 		frame:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
 		frame:SetBackdrop({
 			bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -5004,43 +5025,28 @@ do
 		nameBox:SetAutoFocus(false)
 		nameBox:SetMaxLetters(120)
 
-		local descLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-		descLabel:SetPoint("TOPLEFT", nameBox, "BOTTOMLEFT", 0, -10)
-		descLabel:SetText("Description")
-
-		local descScroll = CreateFrame("ScrollFrame", nil, frame)
-		descScroll:SetSize(450, 96)
-		descScroll:SetPoint("TOPLEFT", descLabel, "BOTTOMLEFT", 0, -4)
-		local descEditBox = CreateFrame("EditBox", nil, descScroll)
-		descEditBox:SetSize(450, 96)
-		descEditBox:SetPoint("TOPLEFT")
-		descEditBox:SetMultiLine(true)
-		descEditBox:SetFontObject(ChatFontNormal)
-		descEditBox:SetAutoFocus(false)
-		descEditBox:SetMaxLetters(2000)
-		descEditBox:SetScript("OnEscapePressed", function(self)
-			self:ClearFocus()
-			frame:Hide()
-		end)
-		descEditBox:SetScript("OnTextChanged", function(self)
-			local parent = self:GetParent()
-			parent:SetVerticalScroll(parent:GetVerticalScrollRange())
-		end)
-		descScroll:SetScrollChild(descEditBox)
-
-		local descBorder = CreateFrame("Frame", nil, frame)
-		descBorder:SetSize(454, 100)
-		descBorder:SetPoint("CENTER", descScroll, "CENTER")
-		descBorder:SetBackdrop({
-			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-			edgeSize = 12,
-			insets = {left = 2, right = 2, top = 2, bottom = 2}
-		})
-		descBorder:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
-
 		local categoryLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-		categoryLabel:SetPoint("TOPLEFT", descScroll, "BOTTOMLEFT", 0, -10)
+		categoryLabel:SetPoint("TOPLEFT", nameBox, "BOTTOMLEFT", 0, -16)
 		categoryLabel:SetText("Category")
+
+		local categoryHelp = CreateFrame("Frame", nil, frame)
+		categoryHelp:SetSize(16, 16)
+		categoryHelp:SetPoint("LEFT", categoryLabel, "RIGHT", 4, 0)
+		categoryHelp:EnableMouse(true)
+		local categoryHelpText = categoryHelp:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		categoryHelpText:SetPoint("CENTER")
+		categoryHelpText:SetText("?")
+		categoryHelp:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText("Category Guide")
+			GameTooltip:AddLine("Categories are the build name for example Balance.", 1, 1, 1, true)
+			GameTooltip:AddLine("The dif balance variants like Thorns would be under the name of the build but both belong to the Boomie Family, Sage is different because its a new perk set.", 1, 1, 1, true)
+			GameTooltip:AddLine("Oathbreaker is a seperate spec from Paladin's for example.", 1, 1, 1, true)
+			GameTooltip:Show()
+		end)
+		categoryHelp:SetScript("OnLeave", function()
+			GameTooltip:Hide()
+		end)
 
 		local categoryBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
 		categoryBox:SetSize(220, 22)
@@ -5049,18 +5055,42 @@ do
 		categoryBox:SetMaxLetters(80)
 		categoryBox:SetTextInsets(8, 8, 0, 0)
 		categoryBox:SetText("Hellfire")
+		local categoryBorder = CreateFrame("Frame", nil, frame)
+		categoryBorder:SetSize(224, 26)
+		categoryBorder:SetPoint("CENTER", categoryBox, "CENTER")
+		categoryBorder:SetBackdrop({
+			bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			edgeSize = 12,
+			insets = {left = 2, right = 2, top = 2, bottom = 2}
+		})
+		categoryBorder:SetBackdropColor(0, 0, 0, 0.85)
+		categoryBorder:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+		categoryBorder:SetFrameLevel(categoryBox:GetFrameLevel() - 1)
 
 		local subCategoryLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-		subCategoryLabel:SetPoint("TOPLEFT", categoryBox, "TOPRIGHT", 14, 0)
-		subCategoryLabel:SetText("SubCategory")
+		subCategoryLabel:SetPoint("TOPLEFT", categoryLabel, "TOPLEFT", 250, 0)
+		subCategoryLabel:SetText("Author")
 
 		local subCategoryBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
-		subCategoryBox:SetSize(216, 22)
+		subCategoryBox:SetSize(194, 22)
 		subCategoryBox:SetPoint("TOPLEFT", subCategoryLabel, "BOTTOMLEFT", 0, -4)
 		subCategoryBox:SetAutoFocus(false)
 		subCategoryBox:SetMaxLetters(80)
 		subCategoryBox:SetTextInsets(8, 8, 0, 0)
 		subCategoryBox:SetText("Author")
+		local subCategoryBorder = CreateFrame("Frame", nil, frame)
+		subCategoryBorder:SetSize(198, 26)
+		subCategoryBorder:SetPoint("CENTER", subCategoryBox, "CENTER")
+		subCategoryBorder:SetBackdrop({
+			bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			edgeSize = 12,
+			insets = {left = 2, right = 2, top = 2, bottom = 2}
+		})
+		subCategoryBorder:SetBackdropColor(0, 0, 0, 0.85)
+		subCategoryBorder:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+		subCategoryBorder:SetFrameLevel(subCategoryBox:GetFrameLevel() - 1)
 
 		local iconLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		iconLabel:SetPoint("TOPLEFT", categoryBox, "BOTTOMLEFT", 0, -32)
@@ -5262,10 +5292,10 @@ do
 		communityLabel:SetText("Community Export (SUB2/SUB1)")
 
 		local communityScroll = CreateFrame("ScrollFrame", nil, frame)
-		communityScroll:SetSize(450, 90)
+		communityScroll:SetSize(450, 70)
 		communityScroll:SetPoint("TOPLEFT", communityLabel, "BOTTOMLEFT", 0, -4)
 		local communityEditBox = CreateFrame("EditBox", nil, communityScroll)
-		communityEditBox:SetSize(450, 90)
+		communityEditBox:SetSize(450, 70)
 		communityEditBox:SetPoint("TOPLEFT")
 		communityEditBox:SetMultiLine(true)
 		communityEditBox:SetFontObject(ChatFontNormal)
@@ -5277,7 +5307,7 @@ do
 		communityScroll:SetScrollChild(communityEditBox)
 
 		local communityBorder = CreateFrame("Frame", nil, frame)
-		communityBorder:SetSize(454, 94)
+		communityBorder:SetSize(454, 74)
 		communityBorder:SetPoint("CENTER", communityScroll, "CENTER")
 		communityBorder:SetBackdrop({
 			edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -5286,13 +5316,26 @@ do
 		})
 		communityBorder:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
 
+		local submitGuideLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		submitGuideLabel:SetPoint("TOPLEFT", communityScroll, "BOTTOMLEFT", 0, -8)
+		submitGuideLabel:SetWidth(450)
+		submitGuideLabel:SetJustifyH("LEFT")
+		submitGuideLabel:SetJustifyV("TOP")
+		submitGuideLabel:SetText(
+			"Submit to Discord:\n" ..
+			"1. Click Export Both.\n" ..
+			"2. Copy the Community Export text.\n" ..
+			"3. Open Discord and message @qtasc.\n" ..
+			"4. Paste the full Community Export string.\n" ..
+			"5. Ask for inclusion in the next update."
+		)
+
 		local exportBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
 		exportBtn:SetSize(130, 22)
 		exportBtn:SetPoint("BOTTOMLEFT", 24, 18)
 		exportBtn:SetText("Export Both")
 		exportBtn:SetScript("OnClick", function()
 			local name = nameBox:GetText()
-			local description = descEditBox:GetText()
 			local payload = Talented:ExportSynastriaBuildString()
 			if not name or name:gsub("^%s*(.-)%s*$", "%1") == "" then
 				name = Talented:GetCommunitySuggestionName()
@@ -5309,7 +5352,7 @@ do
 				subCategory = "Author"
 				subCategoryBox:SetText(subCategory)
 			end
-			local out = Talented:BuildCommunitySubmissionString(name, description, payload, {
+			local out = Talented:BuildCommunitySubmissionString(name, "", payload, {
 				category = category,
 				subcategory = subCategory,
 				icon = frame.selectedGuideIcon or ""
@@ -5339,7 +5382,6 @@ do
 			frame:Hide()
 		end)
 		frame.nameBox = nameBox
-		frame.descBox = descEditBox
 		frame.categoryBox = categoryBox
 		frame.subCategoryBox = subCategoryBox
 		frame.payloadEditBox = payloadEditBox
