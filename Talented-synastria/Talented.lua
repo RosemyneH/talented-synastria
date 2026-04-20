@@ -771,6 +771,7 @@ function Talented:GetCommunityBuildsForClass(className)
 	self.communityBuildCatalog.WITCH = self.communityBuildCatalog.WITCH or {}
 	self.communityBuildCatalog.BARBARIAN = self.communityBuildCatalog.BARBARIAN or {}
 	self.communityBuildCatalog.ROGUE = self.communityBuildCatalog.ROGUE or {}
+	self.communityBuildCatalog.PRIEST = self.communityBuildCatalog.PRIEST or {}
 
 	local function ensureBuild(list, build)
 		for i = 1, #list do
@@ -828,6 +829,56 @@ function Talented:GetCommunityBuildsForClass(className)
 		url = "SUB2,\"Combat CP Evis\",\"\",\"Combat\",\"Scoots\",\"Interface\\Icons\\Ability_rogue_eviscerate\",\"ROGUE,DmZ2vmB03tf2nAtcuDADAm,PERKS,P232541BMB2AB97W4J13qL1h22lB\"",
 		baseClass = "ROGUE",
 		classes = "ROGUE"
+	})
+	ensureBuild(self.communityBuildCatalog.PRIEST, {
+		name = "Ultimate Holy Wander",
+		description = "",
+		category = "Holy",
+		subcategory = "Qt",
+		icon = "Interface\\Icons\\Spell_Holy_GuardianSpirit",
+		url = "SUB2,\"Ultimate Holy Wander\",\"\",\"Holy\",\"Qt\",\"Interface\\Icons\\Spell_Holy_GuardianSpirit\",\"PRIEST,A5mA0mZAtu3AAfF0otn5ao,PERKS,P2451151A3IBK22FX5aKEx1j14u111uA2\"",
+		baseClass = "PRIEST",
+		classes = "PRIEST"
+	})
+	ensureBuild(self.communityBuildCatalog.PRIEST, {
+		name = "Standard SW:D Spriest",
+		description = "",
+		category = "Shadow",
+		subcategory = "Veelina",
+		icon = "Interface\\Icons\\Spell_Holy_ConsumeMagic",
+		url = "SUB2,\"Standard SW:D Spriest\",\"\",\"Shadow\",\"Veelina\",\"Interface\\Icons\\Spell_Holy_ConsumeMagic\",\"PRIEST,AF3A0mZ3ZotAFbDbADfD15a,PERKS,P21351131BMBEC24Ts6pHK5i1-31211\"",
+		baseClass = "PRIEST",
+		classes = "PRIEST"
+	})
+	ensureBuild(self.communityBuildCatalog.PRIEST, {
+		name = "Mythic Spirits",
+		description = "",
+		category = "Spirits",
+		subcategory = "Veelina",
+		icon = "Interface\\Icons\\Ability_Vehicle_LiquidPyrite _blue",
+		url = "SUB2,\"Mythic Spirits\",\"\",\"Spirits\",\"Veelina\",\"Interface\\Icons\\Ability_Vehicle_LiquidPyrite _blue\",\"PRIEST,AZD5u0AA5ZowAAcDbA3fDb1,PERKS,P2451131B1LBK4224Tg3bLEV1111E\"",
+		baseClass = "PRIEST",
+		classes = "PRIEST"
+	})
+	ensureBuild(self.communityBuildCatalog.PRIEST, {
+		name = "Solo",
+		description = "",
+		category = "Disc",
+		subcategory = "Veelina",
+		icon = "Interface\\Icons\\Spell_Holy_PowerWordShield",
+		url = "SUB2,\"Solo\",\"\",\"Disc\",\"Veelina\",\"Interface\\Icons\\Spell_Holy_PowerWordShield\",\"PRIEST,AynA1m0FcpaAAZDtup005Zm,PERKS,P2135141119MBD3Ao123s2X1aK2Cn1r2\"",
+		baseClass = "PRIEST",
+		classes = "PRIEST"
+	})
+	ensureBuild(self.communityBuildCatalog.PRIEST, {
+		name = "Group",
+		description = "",
+		category = "Disc",
+		subcategory = "Veelina",
+		icon = "Interface\\Icons\\Spell_Holy_PowerWordShield",
+		url = "SUB2,\"Group\",\"\",\"Disc\",\"Veelina\",\"Interface\\Icons\\Spell_Holy_PowerWordShield\",\"PRIEST,Ay3AAm0F2paAD2u2tumAA,PERKS,P21351411AMBD3AAd14u2X1aK2C5i1s21\"",
+		baseClass = "PRIEST",
+		classes = "PRIEST"
 	})
 
 	self.communityBuildCatalog[className] = self.communityBuildCatalog[className] or {}
