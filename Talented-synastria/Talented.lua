@@ -599,7 +599,7 @@ function Talented:ScheduleInitialClassSync()
 			frame.elapsed = 0
 			Talented:RunNativeClassSync({
 				quiet = true,
-				allowNativeSelection = false,
+				allowNativeSelection = true,
 				onComplete = function()
 					Talented.initialClassSyncDone = true
 				end
@@ -987,6 +987,13 @@ function Talented:SwitchPlayerClassButton(index)
 	self:ClassTrace("SwitchPlayerClassButton index=%d class=%s", index, tostring(className))
 	local switchedNative = self:EnsureNativeClassSelection()
 	if className then
+		local activeSpec = GetActiveTalentGroup() or 1
+		local classCache = self.multiClassCache and self.multiClassCache[className]
+		local specCache = classCache and classCache[activeSpec]
+		if not specCache then
+			-- Prime a usable snapshot immediately so first render does not show empty trees.
+			self:CaptureClassSpecsFromSpellbook(className)
+		end
 		self:SetManualPlayerClass(className)
 	end
 	if not switchedNative then
@@ -1062,8 +1069,7 @@ function Talented:OnClassSwitchButtonClicked()
 			return
 		end
 		self:ClassTrace("OnClassSwitchButtonClicked class=%s live=%s", tostring(self:GetCurrentPlayerClass()), tostring(self:GetCurrentClassFromTalentTabs()))
-		-- Class swap state can lag behind button click by a frame on custom servers.
-		-- Refresh immediately and once again on the next frame.
+
 		self:UpdatePlayerSpecs()
 		if self.template and self.template.talentGroup then
 			self:SetTemplate(self:GetActiveSpec())
@@ -1079,9 +1085,11 @@ function Talented:OnClassSwitchButtonClicked()
 			local f = CreateFrame("Frame")
 			f:Hide()
 			f:SetScript("OnUpdate", function(frame)
-				frame:Hide()
 				Talented:UpdatePlayerSpecs()
-				Talented:CaptureClassSpecsFromServer(Talented:GetCurrentPlayerClass())
+				local refreshClass = Talented:GetCurrentClassFromTalentTabs()
+				if refreshClass then
+					Talented:CaptureClassSpecsFromServer(refreshClass)
+				end
 				if Talented.template and Talented.template.talentGroup then
 					Talented:SetTemplate(Talented:GetActiveSpec())
 				else
@@ -1091,6 +1099,7 @@ function Talented:OnClassSwitchButtonClicked()
 					Talented.tabs:Update()
 				end
 				Talented:UpdateClassSwitchButtons()
+				frame:Hide()
 			end)
 			self.classSwitchRefreshFrame = f
 		end
@@ -1657,7 +1666,8 @@ do
 		self:Debug("UNCOMPRESS CLASSDATA", class)
 		data = handle_tabs(strsplit("|", data))
 		self.spelldata[class] = data
-		if class == self:GetCurrentPlayerClass() and self.CheckSpellData and ((not self:IsCustomTalentEnvironment()) or self:IsSynastriaDataReady()) then
+		local liveClass = self:GetCurrentClassFromTalentTabs() or self:GetCurrentPlayerClass()
+		if class == liveClass and self.CheckSpellData and ((not self:IsCustomTalentEnvironment()) or self:IsSynastriaDataReady()) then
 			self:CheckSpellData(class)
 		end
 		return data
@@ -2259,7 +2269,7 @@ do
 		if GetNumTalentTabs() == 0 then return end
 		self:HookClassSwitchButtons()
 		if self:IsCustomTalentEnvironment() and not self.manualPlayerClass then
-			self.manualPlayerClass = self:GetBasePlayerClass()
+			self.manualPlayerClass = self:GetCurrentClassFromTalentTabs() or self:GetBasePlayerClass()
 			local classes = self:GetPlayerClasses()
 			for i, className in ipairs(classes) do
 				if className == self.manualPlayerClass then
