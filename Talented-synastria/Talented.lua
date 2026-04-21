@@ -776,6 +776,8 @@ function Talented:GetCommunityBuildsForClass(className)
 	self.communityBuildCatalog.DEATHKNIGHT = self.communityBuildCatalog.DEATHKNIGHT or {}
 	self.communityBuildCatalog.PALADIN = self.communityBuildCatalog.PALADIN or {}
 	self.communityBuildCatalog.WARLOCK = self.communityBuildCatalog.WARLOCK or {}
+	self.communityBuildCatalog.WARRIOR = self.communityBuildCatalog.WARRIOR or {}
+	self.communityBuildCatalog.HUNTER = self.communityBuildCatalog.HUNTER or {}
 
 	local function ensureBuild(list, build)
 		for i = 1, #list do
@@ -804,6 +806,56 @@ function Talented:GetCommunityBuildsForClass(className)
 		baseClass = "BARBARIAN",
 		classes = "WARRIOR,DRUID"
 	})
+	ensureBuild(self.communityBuildCatalog.WARRIOR, {
+		name = "Operational's Low-Level Farming",
+		description = "",
+		category = "Protection",
+		subcategory = "Operational",
+		icon = "Interface\\Icons\\Ability_Warrior_Charge",
+		url = "SUB2,\"Operational's Low-Level Farming\",\"\",\"Protection\",\"Operational\",\"Interface\\Icons\\Ability_Warrior_Charge\",\"WARRIOR,M50o1AZmZFmtC23BFApBdoa,PERKS,P25141312S3BS47E8s6iI5221a18_F8\"",
+		baseClass = "WARRIOR",
+		classes = "WARRIOR"
+	})
+	ensureBuild(self.communityBuildCatalog.WARRIOR, {
+		name = "Jukeyboy's UngaBunga Arms",
+		description = "",
+		category = "Arms",
+		subcategory = "Jukeyboy",
+		icon = "Interface\\Icons\\Ability_Warrior_Bladestorm",
+		url = "SUB2,\"Jukeyboy's UngaBunga Arms\",\"\",\"Arms\",\"Jukeyboy\",\"Interface\\Icons\\Ability_Warrior_Bladestorm\",\"WARRIOR,M3ADaDpu00CcBonFamZDmBA,PERKS,P2371312AF6BO87w2c1i3iIi12gF1114U\"",
+		baseClass = "WARRIOR",
+		classes = "WARRIOR"
+	})
+	ensureBuild(self.communityBuildCatalog.HUNTER, {
+		name = "Volley Farm",
+		description = "",
+		category = "Volley",
+		subcategory = "Veelina",
+		icon = "Interface\\Icons\\Ability_Hunter_FocusedAim",
+		url = "SUB2,\"Volley Farm\",\"\",\"Volley\",\"Veelina\",\"Interface\\Icons\\Ability_Hunter_FocusedAim\",\"HUNTER,3Z0wr3cm1oma2Zw00F0D3Awa,PERKS,P25913UB2AKL2y6_I1OAx4t41212D\"",
+		baseClass = "HUNTER",
+		classes = "HUNTER"
+	})
+	ensureBuild(self.communityBuildCatalog.HUNTER, {
+		name = "Combat Sub BM I stole this from Scoots",
+		description = "",
+		category = "Prestige",
+		subcategory = "Stolen from Scoots",
+		icon = "Interface\\Icons\\Ability_BullRush",
+		url = "SUB2,\"Combat Sub BM I stole this from Scoots\",\"\",\"Prestige\",\"Stolen from Scoots\",\"Interface\\Icons\\Ability_BullRush\",\"HUNTER,35AmAtvaFno3auZt30F3A,ROGUE,Dmw00tZ2vmB0Dyf2nA0cu0A,PERKS,P2374113EFD46K43S31x15W1N5lL1i21_94i1r3\"",
+		baseClass = "HUNTER",
+		classes = "HUNTER,ROGUE"
+	})
+	ensureBuild(self.communityBuildCatalog.HUNTER, {
+		name = "Beast Master Bleed",
+		description = "",
+		category = "Beast Mastery",
+		subcategory = "Tehnix",
+		icon = "Interface\\Icons\\Ability_Hunter_BeastTaming",
+		url = "SUB2,\"Beast Master Bleed\",\"\",\"Beast Mastery\",\"Tehnix\",\"Interface\\Icons\\Ability_Hunter_BeastTaming\",\"HUNTER,35AcAvvbCnmwau0w50aZ3,PERKS,P2732211HF832U43S3X2W1hM1Y1x4n611\"",
+		baseClass = "HUNTER",
+		classes = "HUNTER"
+	})
 	ensureBuild(self.communityBuildCatalog.MAGE, {
 		name = "Big Fuckin Blizzard",
 		description = "",
@@ -821,6 +873,16 @@ function Talented:GetCommunityBuildsForClass(className)
 		subcategory = "Magealou",
 		icon = "Interface\\Icons\\Spell_Arcane_Blink",
 		url = "SUB2,\"Mirror Image (Farming)\",\"\",\"Mirror Image\",\"Magealou\",\"Interface\\Icons\\Spell_Arcane_Blink\",\"MAGE,a0wA3mApBwmnmt3BZ5p03a,PERKS,P213331121BM83R5St6k4d911-36HYL1\"",
+		baseClass = "MAGE",
+		classes = "MAGE"
+	})
+	ensureBuild(self.communityBuildCatalog.MAGE, {
+		name = "Mirror Image (Tanky Mirrors)",
+		description = "",
+		category = "Mirror Image",
+		subcategory = "Magealou",
+		icon = "Interface\\Icons\\Spell_Arcane_Blink",
+		url = "SUB2,\"Mirror Image (Tanky Mirrors)\",\"\",\"Mirror Image\",\"Magealou\",\"Interface\\Icons\\Spell_Arcane_Blink\",\"MAGE,a0wA3mApBwmnmt3BZ5p03a,PERKS,P213331121BM83R5St6k4c9111q3A6H\"",
 		baseClass = "MAGE",
 		classes = "MAGE"
 	})
