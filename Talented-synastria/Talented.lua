@@ -773,6 +773,9 @@ function Talented:GetCommunityBuildsForClass(className)
 	self.communityBuildCatalog.MAGE = self.communityBuildCatalog.MAGE or {}
 	self.communityBuildCatalog.ROGUE = self.communityBuildCatalog.ROGUE or {}
 	self.communityBuildCatalog.PRIEST = self.communityBuildCatalog.PRIEST or {}
+	self.communityBuildCatalog.DEATHKNIGHT = self.communityBuildCatalog.DEATHKNIGHT or {}
+	self.communityBuildCatalog.PALADIN = self.communityBuildCatalog.PALADIN or {}
+	self.communityBuildCatalog.WARLOCK = self.communityBuildCatalog.WARLOCK or {}
 
 	local function ensureBuild(list, build)
 		for i = 1, #list do
@@ -810,6 +813,16 @@ function Talented:GetCommunityBuildsForClass(className)
 		url = "SUB2,\"Big Fuckin Blizzard\",\"\",\"Prestige\",\"Fae\",\"Interface\\Icons\\Spell_Frost_IceStorm\",\"MAGE,aD3A3mA21vmnot1AZmp0DdAm,DRUID,0f2AnFp02Bmrb0A5AoZAt30A,PERKS,P2136411W1B2I24DEv4111m6dDNJ1b2uCk41111\"",
 		baseClass = "MAGE",
 		classes = "MAGE,DRUID"
+	})
+	ensureBuild(self.communityBuildCatalog.MAGE, {
+		name = "Mirror Image (Farming)",
+		description = "",
+		category = "Mirror Image",
+		subcategory = "Magealou",
+		icon = "Interface\\Icons\\Spell_Arcane_Blink",
+		url = "SUB2,\"Mirror Image (Farming)\",\"\",\"Mirror Image\",\"Magealou\",\"Interface\\Icons\\Spell_Arcane_Blink\",\"MAGE,a0wA3mApBwmnmt3BZ5p03a,PERKS,P213331121BM83R5St6k4d911-36HYL1\"",
+		baseClass = "MAGE",
+		classes = "MAGE"
 	})
 	ensureBuild(self.communityBuildCatalog.ROGUE, {
 		name = "Turret Sin",
@@ -890,6 +903,126 @@ function Talented:GetCommunityBuildsForClass(className)
 		url = "SUB2,\"Group\",\"\",\"Disc\",\"Veelina\",\"Interface\\Icons\\Spell_Holy_PowerWordShield\",\"PRIEST,Ay3AAm0F2paAD2u2tumAA,PERKS,P21351411AMBD3AAd14u2X1aK2C5i1s21\"",
 		baseClass = "PRIEST",
 		classes = "PRIEST"
+	})
+	ensureBuild(self.communityBuildCatalog.BARBARIAN, {
+		name = "Blademaster Regen Combat Fury",
+		description = "",
+		category = "Prestige",
+		subcategory = "Bloodlight",
+		icon = "Interface\\Icons\\Ability_Rogue_MurderSpree",
+		url = "SUB2,\"Blademaster Regen Combat Fury\",\"\",\"Prestige\",\"Bloodlight\",\"Interface\\Icons\\Ability_Rogue_MurderSpree\",\"WARRIOR,Mr021DmZmtAaR511waf1ra,ROGUE,DmZ2vmB03tf2nAtcuDADAm,PERKS,P237131R6B2AB187Lb2v113j1e1_I1h22h4a7q232\"",
+		baseClass = "BARBARIAN",
+		classes = "WARRIOR,ROGUE"
+	})
+	ensureBuild(self.communityBuildCatalog.DEATHKNIGHT, {
+		name = "Anthaney's Skeletons",
+		description = "",
+		category = "Skeleton",
+		subcategory = "Deathgranny",
+		icon = "Interface\\Icons\\Spell_DeathKnight_ArmyOfTheDead",
+		url = "SUB2,\"Anthaney's Skeletons\",\"\",\"Skeleton\",\"Deathgranny\",\"Interface\\Icons\\Spell_DeathKnight_ArmyOfTheDead\",\"DEATHKNIGHT,P0yo0mp3aDbZovtt02p1aaA1,PERKS,P27412111V833LMEiM111b2Fi1AY6u5-4\"",
+		baseClass = "DEATHKNIGHT",
+		classes = "DEATHKNIGHT"
+	})
+	ensureBuild(self.communityBuildCatalog.WARLOCK, {
+		name = "IMPerator",
+		description = "",
+		category = "Demo",
+		subcategory = "Mcflurry",
+		icon = "Interface\\Icons\\Spell_Shadow_SummonImp",
+		url = "SUB2,\"IMPerator\",\"\",\"Demo\",\"Mcflurry\",\"Interface\\Icons\\Spell_Shadow_SummonImp\",\"WARLOCK,pZ3oAmbr0Fpdtm5a5D25,PERKS,P27311221AL833N28Z3X41111fIY7u6x2\"",
+		baseClass = "WARLOCK",
+		classes = "WARLOCK"
+	})
+	ensureBuild(self.communityBuildCatalog.DEATHKNIGHT, {
+		name = "Blood Rune Tough Shell",
+		description = "",
+		category = "Blood",
+		subcategory = "Deathgranny",
+		icon = "Interface\\Icons\\Spell_Shadow_LifeDrain",
+		url = "SUB2,\"Blood Rune Tough Shell\",\"\",\"Blood\",\"Deathgranny\",\"Interface\\Icons\\Spell_Shadow_LifeDrain\",\"DEATHKNIGHT,PArm50mp3Ac0aZo0mZAoop0A0v,PERKS,P2461312AF674S4S3Y2c1i3iIi1i6u5c512\"",
+		baseClass = "DEATHKNIGHT",
+		classes = "DEATHKNIGHT"
+	})
+	ensureBuild(self.communityBuildCatalog.PALADIN, {
+		name = "Shadow Paladin",
+		description = "",
+		category = "Oathbreaker",
+		subcategory = "Hannah",
+		icon = "Interface\\Icons\\Spell_Holy_BlessingOfStrength",
+		url = "SUB2,\"Shadow Paladin\",\"\",\"Oathbreaker\",\"Hannah\",\"Interface\\Icons\\Spell_Holy_BlessingOfStrength\",\"PALADIN,dZy2NmAm0mZtD2tAp1o1pA3,PERKS,P2271131X1BE2A2443L1s6vHd2r71311\"",
+		baseClass = "PALADIN",
+		classes = "PALADIN"
+	})
+	ensureBuild(self.communityBuildCatalog.PALADIN, {
+		name = "Ret Paladin",
+		description = "",
+		category = "Retribution",
+		subcategory = "Hannah",
+		icon = "Interface\\Icons\\Spell_Holy_AuraOfLight",
+		url = "SUB2,\"Ret Paladin\",\"\",\"Retribution\",\"Hannah\",\"Interface\\Icons\\Spell_Holy_AuraOfLight\",\"PALADIN,d5Z52tmZtD0uApmoB3Ddn,PERKS,P21361311191LBQ67Mg3uLq1D1111kD\"",
+		baseClass = "PALADIN",
+		classes = "PALADIN"
+	})
+	ensureBuild(self.communityBuildCatalog.DEATHKNIGHT, {
+		name = "Anthaney's Burgerblast Farming",
+		description = "",
+		category = "Blood Rune",
+		subcategory = "Deathgranny",
+		icon = "Interface\\Icons\\Spell_Shadow_ChillTouch",
+		url = "SUB2,\"Anthaney's Burgerblast Farming\",\"\",\"Blood Rune\",\"Deathgranny\",\"Interface\\Icons\\Spell_Shadow_ChillTouch\",\"DEATHKNIGHT,PAym50ap3Ac0aZo0aZAtmmMD0v,PERKS,P247211296A6d144HAZN1y1i1AY6-A127\"",
+		baseClass = "DEATHKNIGHT",
+		classes = "DEATHKNIGHT"
+	})
+	ensureBuild(self.communityBuildCatalog.DEATHKNIGHT, {
+		name = "Paha's Lich",
+		description = "",
+		category = "Lich",
+		subcategory = "Deathgranny",
+		icon = "Interface\\Icons\\Spell_Deathknight_FrostPresence",
+		url = "SUB2,\"Paha's Lich\",\"\",\"Lich\",\"Deathgranny\",\"Interface\\Icons\\Spell_Deathknight_FrostPresence\",\"DEATHKNIGHT,PD5ZoOtu0Cp100A1ZDoom0A0t,PERKS,P24114131B1LBS4L8s6pHPs1Y6WB8111\"",
+		baseClass = "DEATHKNIGHT",
+		classes = "DEATHKNIGHT"
+	})
+	ensureBuild(self.communityBuildCatalog.WARLOCK, {
+		name = "Qt's Pet-less Hellfire 800+FR",
+		description = "",
+		category = "Hellfire",
+		subcategory = "Qt",
+		icon = "Interface\\Icons\\Spell_Fire_Incinerate",
+		url = "SUB2,\"Qt's Pet-less Hellfire 800+FR\",\"\",\"Hellfire\",\"Qt\",\"Interface\\Icons\\Spell_Fire_Incinerate\",\"WARLOCK,pZ0o3mbmAZ5DAfCmbr3r0au,PERKS,P243711W1BD87kP425s1p311t1p9Y31213\"",
+		baseClass = "WARLOCK",
+		classes = "WARLOCK"
+	})
+	ensureBuild(self.communityBuildCatalog.DEATHKNIGHT, {
+		name = "Teddy187's Dancing Rune Weapon",
+		description = "",
+		category = "Blood",
+		subcategory = "Deathgranny",
+		icon = "Interface\\Icons\\Spell_Deathknight_DeathStrike",
+		url = "SUB2,\"Teddy187's Dancing Rune Weapon\",\"\",\"Blood\",\"Deathgranny\",\"Interface\\Icons\\Spell_Deathknight_DeathStrike\",\"DEATHKNIGHT,PArmf3npdAcAaduo0Dt02,PERKS,P23213231B1F6BM244S3b61wIi1i6zA1\"",
+		baseClass = "DEATHKNIGHT",
+		classes = "DEATHKNIGHT"
+	})
+	ensureBuild(self.communityBuildCatalog.DEATHKNIGHT, {
+		name = "Paha's Melee Frost",
+		description = "",
+		category = "Frost",
+		subcategory = "Deathgranny",
+		icon = "Interface\\Icons\\Spell_Deathknight_ClassIcon",
+		url = "SUB2,\"Paha's Melee Frost\",\"\",\"Frost\",\"Deathgranny\",\"Interface\\Icons\\Spell_Deathknight_ClassIcon\",\"DEATHKNIGHT,PArZoottm23bD03n1ra0u0m,PERKS,P2A131CLB3N247E8g3i3iIi1i6-A9711\"",
+		baseClass = "DEATHKNIGHT",
+		classes = "DEATHKNIGHT"
+	})
+	ensureBuild(self.communityBuildCatalog.WARLOCK, {
+		name = "Reaper Soulmirror no Voidsac Toc myth Viable",
+		description = "",
+		category = "Reaper",
+		subcategory = "Mcflurry",
+		icon = "Interface\\Icons\\Spell_Shadow_SoulLeech_3",
+		url = "SUB2,\"Reaper Soulmirror no Voidsac Toc myth Viable\",\"\",\"Reaper\",\"Mcflurry\",\"Interface\\Icons\\Spell_Shadow_SoulLeech_3\",\"WARLOCK,pAtAAnAra5r0p0u0o2maaZt3,PERKS,P2191311BLBEC244Z4xIa2FAu6f92215\"",
+		baseClass = "WARLOCK",
+		classes = "WARLOCK"
 	})
 
 	self.communityBuildCatalog[className] = self.communityBuildCatalog[className] or {}
