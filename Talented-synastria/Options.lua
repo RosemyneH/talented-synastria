@@ -15,6 +15,7 @@ Talented.defaults = {
 		glyph_on_talent_swap = "active",
 		restore_bars = false,
 		specNames = {},
+		qtSubmissionInbox = {},
 		debug_classswitch = false
 	},
 	global = {
@@ -208,6 +209,9 @@ function Talented:UpgradeOptions()
 	local g = self.db.global
 	if not g.communityBuilds then
 		g.communityBuilds = {}
+	end
+	if not p.qtSubmissionInbox then
+		p.qtSubmissionInbox = {}
 	end
 	self.UpgradeOptions = nil
 end
