@@ -1601,10 +1601,13 @@ do
 		end
 
 		local classBuilds
+		local buildContextClass = (type(self.GetCurrentClassFromTalentTabs) == "function" and self:GetCurrentClassFromTalentTabs())
+			or (type(self.GetCurrentPlayerClass) == "function" and self:GetCurrentPlayerClass())
+			or (self.template and self.template.class)
 		if type(self.GetCommunityBuildsForCurrentMask) == "function" then
-			classBuilds = self:GetCommunityBuildsForCurrentMask(self.template.class)
+			classBuilds = self:GetCommunityBuildsForCurrentMask(buildContextClass)
 		else
-			classBuilds = self:GetCommunityBuildsForClass(self.template.class)
+			classBuilds = self:GetCommunityBuildsForClass(buildContextClass)
 		end
 		local communityBuilds = self:GetNamedMenu("communityBuilds")
 		if #classBuilds == 0 then

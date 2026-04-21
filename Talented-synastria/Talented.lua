@@ -791,7 +791,7 @@ function Talented:GetCommunityBuildsForClass(className)
 	ensureBuild(self.communityBuildCatalog.WITCH, {
 		name = "Lulleh's Witch - Soullink Regen Build",
 		url = "WARLOCK,pZAoDmbrAF3aZ53mfC0nr,DRUID,0Fm30Dpa0AZtood3A13wa30bZA,PERKS,P27711W1B2J1424Lo3kLT1b2_3p9Y31141B1312",
-		category = "Hellfire",
+		category = "Prestige",
 		subcategory = "Lulleh",
 		baseClass = "WITCH",
 		classes = "WARLOCK,DRUID"
@@ -837,12 +837,12 @@ function Talented:GetCommunityBuildsForClass(className)
 		classes = "HUNTER"
 	})
 	ensureBuild(self.communityBuildCatalog.HUNTER, {
-		name = "Combat Sub BM I stole this from Scoots",
+		name = "Combat Sub BM",
 		description = "",
 		category = "Prestige",
-		subcategory = "Stolen from Scoots",
+		subcategory = "Scoots",
 		icon = "Interface\\Icons\\Ability_BullRush",
-		url = "SUB2,\"Combat Sub BM I stole this from Scoots\",\"\",\"Prestige\",\"Stolen from Scoots\",\"Interface\\Icons\\Ability_BullRush\",\"HUNTER,35AmAtvaFno3auZt30F3A,ROGUE,Dmw00tZ2vmB0Dyf2nA0cu0A,PERKS,P2374113EFD46K43S31x15W1N5lL1i21_94i1r3\"",
+		url = "SUB2,\"Combat Sub BM\",\"\",\"Prestige\",\"Scoots\",\"Interface\\Icons\\Ability_BullRush\",\"HUNTER,35AmAtvaFno3auZt30F3A,ROGUE,Dmw00tZ2vmB0Dyf2nA0cu0A,PERKS,P2374113EFD46K43S31x15W1N5lL1i21_94i1r3\"",
 		baseClass = "HUNTER",
 		classes = "HUNTER,ROGUE"
 	})
@@ -980,9 +980,9 @@ function Talented:GetCommunityBuildsForClass(className)
 		name = "Anthaney's Skeletons",
 		description = "",
 		category = "Skeleton",
-		subcategory = "Deathgranny",
+		subcategory = "Anthaney",
 		icon = "Interface\\Icons\\Spell_DeathKnight_ArmyOfTheDead",
-		url = "SUB2,\"Anthaney's Skeletons\",\"\",\"Skeleton\",\"Deathgranny\",\"Interface\\Icons\\Spell_DeathKnight_ArmyOfTheDead\",\"DEATHKNIGHT,P0yo0mp3aDbZovtt02p1aaA1,PERKS,P27412111V833LMEiM111b2Fi1AY6u5-4\"",
+		url = "SUB2,\"Anthaney's Skeletons\",\"\",\"Skeleton\",\"Anthaney\",\"Interface\\Icons\\Spell_DeathKnight_ArmyOfTheDead\",\"DEATHKNIGHT,P0yo0mp3aDbZovtt02p1aaA1,PERKS,P27412111V833LMEiM111b2Fi1AY6u5-4\"",
 		baseClass = "DEATHKNIGHT",
 		classes = "DEATHKNIGHT"
 	})
@@ -1030,9 +1030,9 @@ function Talented:GetCommunityBuildsForClass(className)
 		name = "Anthaney's Burgerblast Farming",
 		description = "",
 		category = "Blood Rune",
-		subcategory = "Deathgranny",
+		subcategory = "Anthaney",
 		icon = "Interface\\Icons\\Spell_Shadow_ChillTouch",
-		url = "SUB2,\"Anthaney's Burgerblast Farming\",\"\",\"Blood Rune\",\"Deathgranny\",\"Interface\\Icons\\Spell_Shadow_ChillTouch\",\"DEATHKNIGHT,PAym50ap3Ac0aZo0aZAtmmMD0v,PERKS,P247211296A6d144HAZN1y1i1AY6-A127\"",
+		url = "SUB2,\"Anthaney's Burgerblast Farming\",\"\",\"Blood\",\"Anthaney\",\"Interface\\Icons\\Spell_Shadow_ChillTouch\",\"DEATHKNIGHT,PAym50ap3Ac0aZo0aZAtmmMD0v,PERKS,P247211296A6d144HAZN1y1i1AY6-A127\"",
 		baseClass = "DEATHKNIGHT",
 		classes = "DEATHKNIGHT"
 	})
@@ -1040,9 +1040,9 @@ function Talented:GetCommunityBuildsForClass(className)
 		name = "Paha's Lich",
 		description = "",
 		category = "Lich",
-		subcategory = "Deathgranny",
+		subcategory = "Paha",
 		icon = "Interface\\Icons\\Spell_Deathknight_FrostPresence",
-		url = "SUB2,\"Paha's Lich\",\"\",\"Lich\",\"Deathgranny\",\"Interface\\Icons\\Spell_Deathknight_FrostPresence\",\"DEATHKNIGHT,PD5ZoOtu0Cp100A1ZDoom0A0t,PERKS,P24114131B1LBS4L8s6pHPs1Y6WB8111\"",
+		url = "SUB2,\"Paha's Lich\",\"\",\"Lich\",\"Paha\",\"Interface\\Icons\\Spell_Deathknight_FrostPresence\",\"DEATHKNIGHT,PD5ZoOtu0Cp100A1ZDoom0A0t,PERKS,P24114131B1LBS4L8s6pHPs1Y6WB8111\"",
 		baseClass = "DEATHKNIGHT",
 		classes = "DEATHKNIGHT"
 	})
@@ -1060,9 +1060,9 @@ function Talented:GetCommunityBuildsForClass(className)
 		name = "Teddy187's Dancing Rune Weapon",
 		description = "",
 		category = "Blood",
-		subcategory = "Deathgranny",
+		subcategory = "Teddy187",
 		icon = "Interface\\Icons\\Spell_Deathknight_DeathStrike",
-		url = "SUB2,\"Teddy187's Dancing Rune Weapon\",\"\",\"Blood\",\"Deathgranny\",\"Interface\\Icons\\Spell_Deathknight_DeathStrike\",\"DEATHKNIGHT,PArmf3npdAcAaduo0Dt02,PERKS,P23213231B1F6BM244S3b61wIi1i6zA1\"",
+		url = "SUB2,\"Teddy187's Dancing Rune Weapon\",\"\",\"Blood\",\"Teddy187\",\"Interface\\Icons\\Spell_Deathknight_DeathStrike\",\"DEATHKNIGHT,PArmf3npdAcAaduo0Dt02,PERKS,P23213231B1F6BM244S3b61wIi1i6zA1\"",
 		baseClass = "DEATHKNIGHT",
 		classes = "DEATHKNIGHT"
 	})
@@ -1070,9 +1070,9 @@ function Talented:GetCommunityBuildsForClass(className)
 		name = "Paha's Melee Frost",
 		description = "",
 		category = "Frost",
-		subcategory = "Deathgranny",
+		subcategory = "Paha",
 		icon = "Interface\\Icons\\Spell_Deathknight_ClassIcon",
-		url = "SUB2,\"Paha's Melee Frost\",\"\",\"Frost\",\"Deathgranny\",\"Interface\\Icons\\Spell_Deathknight_ClassIcon\",\"DEATHKNIGHT,PArZoottm23bD03n1ra0u0m,PERKS,P2A131CLB3N247E8g3i3iIi1i6-A9711\"",
+		url = "SUB2,\"Paha's Melee Frost\",\"\",\"Frost\",\"Paha\",\"Interface\\Icons\\Spell_Deathknight_ClassIcon\",\"DEATHKNIGHT,PArZoottm23bD03n1ra0u0m,PERKS,P2A131CLB3N247E8g3i3iIi1i6-A9711\"",
 		baseClass = "DEATHKNIGHT",
 		classes = "DEATHKNIGHT"
 	})
@@ -1116,70 +1116,83 @@ do
 		return nil
 	end
 
-	local function BuildMatchesCurrentClassMask(self, build, sourceClassName)
+	local function BuildMatchesCurrentClassMask(self, build, sourceClassName, requiredClassName)
 		if type(build) ~= "table" then
 			return false
 		end
 
-		local classMask = (type(CustomGetClassMask) == "function") and (CustomGetClassMask() or 0) or nil
+		local sourceClass = type(sourceClassName) == "string" and sourceClassName:upper() or nil
+		local requiredClass = type(requiredClassName) == "string" and requiredClassName:upper() or nil
 		local currentClasses = {}
+
 		for _, name in ipairs(self:GetPlayerClasses()) do
-			currentClasses[name] = true
+			if type(name) == "string" and name ~= "" then
+				currentClasses[name:upper()] = true
+			end
+		end
+		local liveClass = self:GetCurrentClassFromTalentTabs()
+		if type(liveClass) == "string" and liveClass ~= "" then
+			currentClasses[liveClass:upper()] = true
+		end
+		local playerClass = self:GetCurrentPlayerClass()
+		if type(playerClass) == "string" and playerClass ~= "" then
+			currentClasses[playerClass:upper()] = true
+		end
+
+		local classMask = (type(CustomGetClassMask) == "function") and (CustomGetClassMask() or 0) or nil
+		if classMask then
+			for classId = 1, 11 do
+				local className = CLASS_BY_ID[classId]
+				if className and bit.band(classMask, bit.lshift(1, classId - 1)) > 0 then
+					currentClasses[className] = true
+				end
+			end
+		end
+
+		local required = {}
+		local requiredSet = {}
+		local function addRequired(name)
+			if type(name) ~= "string" then
+				return
+			end
+			local token = name:upper():gsub("^%s*(.-)%s*$", "%1")
+			if token ~= "" and not requiredSet[token] then
+				requiredSet[token] = true
+				required[#required + 1] = token
+			end
+		end
+		if type(build.classes) == "string" and build.classes ~= "" then
+			for token in build.classes:gmatch("[^,%s;|]+") do
+				addRequired(token)
+			end
+		end
+		addRequired(build.class1)
+		addRequired(build.class2)
+		addRequired(build.class)
+		local hasExplicitRequirements = (#required > 0)
+
+		if hasExplicitRequirements then
+			for _, className in ipairs(required) do
+				if not currentClasses[className] then
+					return false
+				end
+			end
+			return true
 		end
 
 		if type(build.classMask) == "number" and classMask then
-			-- Require all bits in build.classMask to be present in player classMask.
 			if bit.band(classMask, build.classMask) == build.classMask then
 				return true
 			end
 		end
 
-		-- Custom servers can expose a broad base class (e.g. "Witch") while
-		-- talents are split into multiple class trees. Allow those builds globally.
-		local baseLocalized, baseToken = UnitClass("player")
-		if (baseLocalized and baseLocalized:upper() == "WITCH") or (baseToken and baseToken:upper() == "WITCH") then
-			if type(build.baseClass) == "string" and build.baseClass:upper() == "WITCH" then
-				return true
-			end
-			if type(build.url) == "string" and build.url:find(",PERKS,", 1, true) then
-				return true
-			end
+		if requiredClass == "WITCH" and type(build.baseClass) == "string" and build.baseClass:upper() == "WITCH" then
+			return true
 		end
-
-		if type(build.classes) == "string" and build.classes ~= "" then
-			local required = {}
-			for token in build.classes:gmatch("[^,%s;|]+") do
-				required[#required + 1] = token:upper()
-			end
-			if #required > 0 then
-				local allPresent = true
-				for _, req in ipairs(required) do
-					if not currentClasses[req] then
-						allPresent = false
-						break
-					end
-				end
-				if allPresent then
-					return true
-				end
-			end
+		if sourceClass and currentClasses[sourceClass] then
+			return true
 		end
-
-		if type(build.class1) == "string" and type(build.class2) == "string" then
-			local c1, c2 = build.class1:upper(), build.class2:upper()
-			if currentClasses[c1] and currentClasses[c2] then
-				return true
-			end
-		end
-
-		if type(build.class) == "string" then
-			local oneClass = build.class:upper()
-			if currentClasses[oneClass] then
-				return true
-			end
-		end
-
-		return sourceClassName and currentClasses[sourceClassName] or false
+		return false
 	end
 
 	function Talented:GetCommunityBuildsForCurrentMask(className)
@@ -1191,7 +1204,7 @@ do
 			if type(build) ~= "table" then
 				return
 			end
-			if not BuildMatchesCurrentClassMask(self, build, sourceClassName) then
+			if not BuildMatchesCurrentClassMask(self, build, sourceClassName, className) then
 				return
 			end
 			local key = tostring(build.name or "") .. "||" .. tostring(build.url or "")
