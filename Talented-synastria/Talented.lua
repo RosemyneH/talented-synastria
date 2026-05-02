@@ -33,23 +33,20 @@ function Talented:IsSynastriaDataReady()
 	return ok and (tonumber(value) or 0) ~= 0
 end
 
-function Talented:SafeInvokeWhenReady(fnName)
-	if type(SynastriaSafeInvoke) == "function" then
-		SynastriaSafeInvoke(fnName)
-		return true
-	end
-	return false
-end
-
 function Talented:RunDeferredSynastriaInit()
 	if self:IsCustomTalentEnvironment() and not self:IsSynastriaDataReady() then
+		print("Talented:RunDeferredSynastriaInit: not ready")
 		return
 	end
+	print("Talented:RunDeferredSynastriaInit: ready")
 	self:MigrateSpecNames()
 	self:UpdatePlayerSpecs()
+	print("Talented:RunDeferredSynastriaInit: updated specs")
 	if self.base and self.base.perkTab then
 		self:AddPerksToFrame(self.base)
+		print("Talented:RunDeferredSynastriaInit: added perks")
 	end
+	print("Talented:RunDeferredSynastriaInit: finished")
 end
 
 function Talented:QueueDeferredSynastriaInit()
@@ -66,11 +63,8 @@ function Talented:QueueDeferredSynastriaInit()
 			_G.Talented:RunDeferredSynastriaInit()
 		end
 	end
-	if not self:SafeInvokeWhenReady("Talented_SafeDeferredInit") then
-		-- Fallback if the server helper is unavailable for any reason.
-		self:RunDeferredSynastriaInit()
-	end
 end
+SynastriaSafeInvoke("Talented_SafeDeferredInit")
 
 function Talented:GetCurrentClassFromTalentTabs()
 	if not self.tabdata then
@@ -162,12 +156,13 @@ end
 function Talented:SetManualPlayerClass(className)
 	if not className or not self.spelldata or not self.spelldata[className] then
 		self:ClassTrace("SetManualPlayerClass rejected class=%s", tostring(className))
-		return
+		return false
 	end
 	self:ClassTrace("SetManualPlayerClass class=%s index=%s", className, tostring(self.manualClassIndex))
 	self.manualPlayerClass = className
+	local nativeOk = true
 	if self:IsCustomTalentEnvironment() then
-		local nativeOk = self:EnsureNativeClassSelection()
+		nativeOk = self:EnsureNativeClassSelection()
 		local liveClass = self:GetCurrentClassFromTalentTabs()
 		if nativeOk or liveClass == className then
 			self:CaptureClassSpecsFromServer(className)
@@ -189,6 +184,7 @@ function Talented:SetManualPlayerClass(className)
 	end
 	self:UpdateClassSwitchButtons()
 	self:PLAYER_TALENT_UPDATE()
+	return nativeOk
 end
 
 function Talented:GetManualClassIndex()
@@ -202,6 +198,41 @@ function Talented:GetManualClassIndex()
 	for i, className in ipairs(classes) do
 		if className == self.manualPlayerClass then
 			return i
+		end
+	end
+end
+
+function Talented:GetNativeClassButtonIndexForTalentedSlot(talentedSlot)
+	if type(talentedSlot) ~= "number" or talentedSlot < 1 then
+		return talentedSlot
+	end
+	local classes = self:GetPlayerClasses()
+	if #classes ~= 2 then
+		return talentedSlot
+	end
+	local base = self:GetBasePlayerClass()
+	if classes[1] == base then
+		return talentedSlot
+	end
+	if classes[2] == base then
+		return 3 - talentedSlot
+	end
+	return talentedSlot
+end
+
+function Talented:SyncManualClassFromLiveTabs()
+	if not self:IsCustomTalentEnvironment() then
+		return
+	end
+	local liveClass = self:GetCurrentClassFromTalentTabs()
+	if not liveClass then
+		return
+	end
+	for i, name in ipairs(self:GetPlayerClasses()) do
+		if name == liveClass then
+			self.manualClassIndex = i
+			self.manualPlayerClass = liveClass
+			return
 		end
 	end
 end
@@ -371,45 +402,58 @@ function Talented:EnsureNativeClassSelection()
 		self:ClassTrace("EnsureNativeClassSelection no manual index for class=%s", tostring(self.manualPlayerClass))
 		return false
 	end
-	local button, tempOpenedTalentFrame = self:GetNativeClassButton(index, true)
+	local wasTalentFrameShown = _G.PlayerTalentFrame and _G.PlayerTalentFrame:IsShown()
+	local buttonIndex = self:GetNativeClassButtonIndexForTalentedSlot(index)
+	if self.classSwitchDebug and buttonIndex ~= index then
+		print(
+			("Talented[ClassSwitch]: native button remap talentedSlot=%s -> PlayerClassTalentBtn%s (base=%s classes=%s,%s)"):format(
+				tostring(index),
+				tostring(buttonIndex),
+				tostring(self:GetBasePlayerClass()),
+				tostring(self:GetPlayerClasses()[1]),
+				tostring(self:GetPlayerClasses()[2])
+			)
+		)
+	end
+	local button = select(1, self:GetNativeClassButton(buttonIndex, true))
+	local ok = false
 	if button and button.Click then
 		self.suppressClassSwitchHook = true
 		pcall(button.Click, button)
 		self.suppressClassSwitchHook = nil
-		self:ClassTrace("EnsureNativeClassSelection clicked native button index=%d name=%s", index, tostring(button.GetName and button:GetName() or "unknown"))
-		if tempOpenedTalentFrame and _G.PlayerTalentFrame and _G.PlayerTalentFrame:IsShown() then
-			HideUIPanel(_G.PlayerTalentFrame)
-		end
-		return true
+		self:ClassTrace(
+			"EnsureNativeClassSelection clicked native button talentedSlot=%d buttonIndex=%d name=%s",
+			index,
+			buttonIndex,
+			tostring(button.GetName and button:GetName() or "unknown")
+		)
+		ok = true
 	elseif button then
 		local onClick = button:GetScript("OnClick")
 		if onClick then
 			self.suppressClassSwitchHook = true
 			pcall(onClick, button, "LeftButton")
 			self.suppressClassSwitchHook = nil
-			self:ClassTrace("EnsureNativeClassSelection fired OnClick index=%d name=%s", index, tostring(button.GetName and button:GetName() or "unknown"))
-			if tempOpenedTalentFrame and _G.PlayerTalentFrame and _G.PlayerTalentFrame:IsShown() then
-				HideUIPanel(_G.PlayerTalentFrame)
-			end
-			return true
+			self:ClassTrace(
+				"EnsureNativeClassSelection fired OnClick talentedSlot=%d buttonIndex=%d name=%s",
+				index,
+				buttonIndex,
+				tostring(button.GetName and button:GetName() or "unknown")
+			)
+			ok = true
 		end
 	end
-	if tempOpenedTalentFrame and _G.PlayerTalentFrame and _G.PlayerTalentFrame:IsShown() then
-		HideUIPanel(_G.PlayerTalentFrame)
+	local tf = _G.PlayerTalentFrame
+	if tf and tf:IsShown() and not wasTalentFrameShown then
+		HideUIPanel(tf)
 	end
-	self:ClassTrace("EnsureNativeClassSelection failed index=%d", index)
-	return false
+	if not ok then
+		self:ClassTrace("EnsureNativeClassSelection failed talentedSlot=%d buttonIndex=%d", index, buttonIndex)
+	end
+	return ok
 end
 
 function Talented:TryServerClassSwitch(index, className, allowNativeSelection)
-	local switched = false
-	if allowNativeSelection ~= false then
-		switched = self:EnsureNativeClassSelection()
-	end
-	if switched then
-		return true
-	end
-
 	local classId = self:GetClassIdByName(className)
 	local candidates = {
 		"CustomSetActiveClass",
@@ -422,25 +466,50 @@ function Talented:TryServerClassSwitch(index, className, allowNativeSelection)
 		"SetPlayerClassIndex"
 	}
 
-	for _, fnName in ipairs(candidates) do
-		local fn = _G[fnName]
-		if type(fn) == "function" then
-			if pcall(fn, index) then
-				self:ClassTrace("TryServerClassSwitch used %s(%d)", fnName, index)
-				return true
-			end
-			if classId and pcall(fn, classId) then
-				self:ClassTrace("TryServerClassSwitch used %s(%d classId)", fnName, classId)
-				return true
-			end
-			if className and pcall(fn, className) then
-				self:ClassTrace("TryServerClassSwitch used %s(%s className)", fnName, className)
-				return true
+	local function tryGlobals()
+		for _, fnName in ipairs(candidates) do
+			local fn = _G[fnName]
+			if type(fn) == "function" then
+				if pcall(fn, index) then
+					self:ClassTrace("TryServerClassSwitch used %s(%d)", fnName, index)
+					if self.classSwitchDebug then
+						print(("Talented[ClassSwitch]: global hook OK %s(%d)"):format(fnName, index))
+					end
+					return true
+				end
+				if classId and pcall(fn, classId) then
+					self:ClassTrace("TryServerClassSwitch used %s(%d classId)", fnName, classId)
+					if self.classSwitchDebug then
+						print(("Talented[ClassSwitch]: global hook OK %s(classId %d)"):format(fnName, classId))
+					end
+					return true
+				end
+				if className and pcall(fn, className) then
+					self:ClassTrace("TryServerClassSwitch used %s(%s className)", fnName, className)
+					if self.classSwitchDebug then
+						print(("Talented[ClassSwitch]: global hook OK %s(%s)"):format(fnName, className))
+					end
+					return true
+				end
 			end
 		end
+		return false
 	end
 
-	return false
+	if self:IsCustomTalentEnvironment() then
+		local globalOk = tryGlobals()
+		local nativeOk = false
+		if allowNativeSelection ~= false then
+			nativeOk = self:EnsureNativeClassSelection()
+		end
+		return globalOk or nativeOk
+	end
+
+	if allowNativeSelection ~= false and self:EnsureNativeClassSelection() then
+		return true
+	end
+
+	return tryGlobals()
 end
 
 function Talented:RunNativeClassSync(options)
@@ -1276,20 +1345,27 @@ function Talented:SwitchPlayerClassButton(index)
 	local className = classes[index]
 	self.manualClassIndex = index
 	self:ClassTrace("SwitchPlayerClassButton index=%d class=%s", index, tostring(className))
-	local switchedNative = self:EnsureNativeClassSelection()
+	local switchedNative = false
 	if className then
 		local activeSpec = GetActiveTalentGroup() or 1
 		local classCache = self.multiClassCache and self.multiClassCache[className]
 		local specCache = classCache and classCache[activeSpec]
 		if not specCache then
-			-- Prime a usable snapshot immediately so first render does not show empty trees.
-			self:CaptureClassSpecsFromSpellbook(className)
+			local liveClass = self:GetCurrentClassFromTalentTabs()
+			local allowSpellbookPrime = not self:IsCustomTalentEnvironment()
+				or liveClass == className
+				or (not liveClass and (GetNumTalentTabs() or 0) == 0)
+			if allowSpellbookPrime then
+				self:CaptureClassSpecsFromSpellbook(className)
+			end
 		end
-		self:SetManualPlayerClass(className)
+		switchedNative = self:SetManualPlayerClass(className)
 	end
 	if not switchedNative then
 		self:ClassTrace("SwitchPlayerClassButton no native button index=%d", index)
 		self:OnClassSwitchButtonClicked()
+	else
+		self:ScheduleClassSwitchRefresh({syncManualFromLive = false})
 	end
 end
 
@@ -1354,6 +1430,64 @@ function Talented:UpdateClassSwitchButtons()
 	end
 end
 
+Talented.classSwitchDebug = false
+
+function Talented:ScheduleClassSwitchRefresh(options)
+	options = options or {}
+	if not self.classSwitchRefreshFrame then
+		local f = CreateFrame("Frame")
+		f:Hide()
+		f:SetScript("OnUpdate", function(frame, elapsed)
+			frame.elapsed = (frame.elapsed or 0) + elapsed
+			frame.ticks = (frame.ticks or 0) + 1
+
+			if frame.syncManualFromLive then
+				Talented:SyncManualClassFromLiveTabs()
+			end
+
+			Talented:UpdatePlayerSpecs()
+			local refreshClass = Talented:GetCurrentClassFromTalentTabs()
+			if refreshClass then
+				Talented:CaptureClassSpecsFromServer(refreshClass)
+			end
+			if Talented.template and Talented.template.talentGroup then
+				Talented:SetTemplate(Talented:GetActiveSpec())
+			else
+				Talented:UpdateView()
+			end
+			if Talented.tabs then
+				Talented.tabs:Update()
+			end
+			Talented:UpdateClassSwitchButtons()
+
+			local live = Talented:GetCurrentClassFromTalentTabs()
+			local manual = Talented.manualPlayerClass
+			local tabsReady = (GetNumTalentTabs() or 0) > 0
+			local aligned = tabsReady and live and manual and live == manual
+			if aligned then
+				frame.stableFrames = (frame.stableFrames or 0) + 1
+			else
+				frame.stableFrames = 0
+			end
+
+			local maxElapsed = 2.5
+			local maxTicks = frame.syncManualFromLive and 90 or 48
+			if frame.stableFrames >= 3 or frame.elapsed >= maxElapsed or frame.ticks >= maxTicks then
+				frame:Hide()
+				frame.elapsed = 0
+				frame.ticks = 0
+				frame.stableFrames = 0
+			end
+		end)
+		self.classSwitchRefreshFrame = f
+	end
+	self.classSwitchRefreshFrame.syncManualFromLive = options.syncManualFromLive and true or false
+	self.classSwitchRefreshFrame.elapsed = 0
+	self.classSwitchRefreshFrame.ticks = 0
+	self.classSwitchRefreshFrame.stableFrames = 0
+	self.classSwitchRefreshFrame:Show()
+end
+
 function Talented:OnClassSwitchButtonClicked()
 		if self.suppressClassSwitchHook then
 			self:ClassTrace("OnClassSwitchButtonClicked suppressed")
@@ -1361,6 +1495,7 @@ function Talented:OnClassSwitchButtonClicked()
 		end
 		self:ClassTrace("OnClassSwitchButtonClicked class=%s live=%s", tostring(self:GetCurrentPlayerClass()), tostring(self:GetCurrentClassFromTalentTabs()))
 
+		self:SyncManualClassFromLiveTabs()
 		self:UpdatePlayerSpecs()
 		if self.template and self.template.talentGroup then
 			self:SetTemplate(self:GetActiveSpec())
@@ -1372,29 +1507,7 @@ function Talented:OnClassSwitchButtonClicked()
 		end
 		self:UpdateClassSwitchButtons()
 
-		if not self.classSwitchRefreshFrame then
-			local f = CreateFrame("Frame")
-			f:Hide()
-			f:SetScript("OnUpdate", function(frame)
-				Talented:UpdatePlayerSpecs()
-				local refreshClass = Talented:GetCurrentClassFromTalentTabs()
-				if refreshClass then
-					Talented:CaptureClassSpecsFromServer(refreshClass)
-				end
-				if Talented.template and Talented.template.talentGroup then
-					Talented:SetTemplate(Talented:GetActiveSpec())
-				else
-					Talented:UpdateView()
-				end
-				if Talented.tabs then
-					Talented.tabs:Update()
-				end
-				Talented:UpdateClassSwitchButtons()
-				frame:Hide()
-			end)
-			self.classSwitchRefreshFrame = f
-		end
-		self.classSwitchRefreshFrame:Show()
+		self:ScheduleClassSwitchRefresh({syncManualFromLive = true})
 end
 
 -------------------------------------------------------------------------------
