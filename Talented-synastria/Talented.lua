@@ -1466,7 +1466,7 @@ do
 	end
 
 	function Talented:OnInitialize()
-		self.db = LibStub("AceDB-3.0"):New("TalentedDB", self.defaults)
+		self.db = LibStub("AceDB-3.0"):New("TalentedDB_Guid", self.defaults)
 		self:UpgradeOptions()
 		self:LoadTemplates()
 

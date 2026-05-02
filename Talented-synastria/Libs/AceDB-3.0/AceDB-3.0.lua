@@ -255,7 +255,8 @@ local preserve_keys = {
 }
 
 local realmKey = GetRealmName()
-local charKey = UnitName("player") .. " - " .. realmKey
+local guid = type(UnitGUID) == "function" and UnitGUID("player") or nil
+local charKey = (type(guid) == "string" and guid ~= "") and guid or (UnitName("player") .. " - " .. realmKey)
 local _, classKey = UnitClass("player")
 local _, raceKey = UnitRace("player")
 local factionKey = UnitFactionGroup("player")

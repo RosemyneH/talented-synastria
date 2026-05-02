@@ -4,7 +4,7 @@
 ## Author: Jerry (Kader Edition), Qt, Lulleh
 ## Version: v2.4.8
 ## OptionalDeps: Ace3
-## SavedVariables: TalentedDB
+## SavedVariables: TalentedDB_Guid
 ## LoadManagers: Talented_Loader AddonLoader
 ## X-Category: Interface Enhancements
 ## X-LoadOn-Execute: local N = "ToggleTalentFrame" local P = _G[N] local function f() if _G[N] == f then _G[N] = P end local T = "Talented" AddonLoader:LoadAddOn(T) local t = _G[T] if t then t[N](t) else P() end end _G[N] = f
