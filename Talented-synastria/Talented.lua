@@ -5303,11 +5303,6 @@ do
 			return TrimText(UnitName("player"))
 		end
 
-		local function IsQtClient()
-			local playerName = GetOnlinePlayerName()
-			return string.lower(playerName or "") == "qt"
-		end
-
 		local function GetDefaultSubmissionCategory()
 			local hasMultipleClasses = false
 			local playerClasses = self.GetPlayerClasses and self:GetPlayerClasses()
@@ -5634,43 +5629,6 @@ do
 			"5. Ask for inclusion in the next update."
 		)
 
-		local QT_SUBMISSION_TARGET = "Qt"
-		local QT_SUBMISSION_PREFIX = "TSYN_SUB"
-		local QT_SUBMISSION_SEP = "\031"
-		local QT_SUBMISSION_CHUNK_SIZE = 220
-		local qtAvailability = "unknown"
-		local qtSendPending = false
-		local incomingQtSubmissions = {}
-		local sendQtBtn
-
-		local function UpdateQtSendButtonState()
-			if not sendQtBtn then
-				return
-			end
-			if qtAvailability == "offline" then
-				sendQtBtn:SetText("Qt Offline")
-				sendQtBtn:Disable()
-			else
-				sendQtBtn:SetText("Send to Qt")
-				sendQtBtn:Enable()
-			end
-		end
-
-		local function IsQtOfflineSystemMessage(msg)
-			msg = tostring(msg or "")
-			if msg == "" then
-				return false
-			end
-			if type(ERR_CHAT_PLAYER_NOT_FOUND_S) == "string" and ERR_CHAT_PLAYER_NOT_FOUND_S ~= "" then
-				local direct = ERR_CHAT_PLAYER_NOT_FOUND_S:format(QT_SUBMISSION_TARGET)
-				if msg == direct then
-					return true
-				end
-			end
-			local lowered = string.lower(msg)
-			return lowered:find("qt", 1, true) and (lowered:find("no player named", 1, true) or lowered:find("not found", 1, true))
-		end
-
 		local function BuildCurrentCommunityExport()
 			local name = nameBox:GetText()
 			local payload = Talented:ExportSynastriaBuildString()
@@ -5701,158 +5659,6 @@ do
 			return out
 		end
 
-		local function ParseSubmissionName(submissionText)
-			local name = tostring(submissionText or ""):match('^SUB2,"([^"]*)"')
-			if not name or name == "" then
-				name = tostring(submissionText or ""):match('^SUB1,"([^"]*)"')
-			end
-			if not name or name == "" then
-				name = Talented:GetCommunitySuggestionName()
-			end
-			return TrimText(name)
-		end
-
-		local function EnsureAddonPrefix()
-			if C_ChatInfo and type(C_ChatInfo.RegisterAddonMessagePrefix) == "function" then
-				C_ChatInfo.RegisterAddonMessagePrefix(QT_SUBMISSION_PREFIX)
-			elseif type(RegisterAddonMessagePrefix) == "function" then
-				RegisterAddonMessagePrefix(QT_SUBMISSION_PREFIX)
-			end
-		end
-
-		local function SendAddonWhisperMessage(payload)
-			if C_ChatInfo and type(C_ChatInfo.SendAddonMessage) == "function" then
-				local ok = pcall(C_ChatInfo.SendAddonMessage, QT_SUBMISSION_PREFIX, payload, "WHISPER", QT_SUBMISSION_TARGET)
-				return ok
-			end
-			if type(SendAddonMessage) == "function" then
-				local ok = pcall(SendAddonMessage, QT_SUBMISSION_PREFIX, payload, "WHISPER", QT_SUBMISSION_TARGET)
-				return ok
-			end
-			return false
-		end
-
-		local function ShowQtSubmissionPopup(sender, buildName, submissionText)
-			if not StaticPopupDialogs["TALENTED_QT_SUBMISSION_RECEIVED"] then
-				StaticPopupDialogs["TALENTED_QT_SUBMISSION_RECEIVED"] = {
-					text = "New Qt submission received.",
-					button1 = CLOSE,
-					hasEditBox = 1,
-					hasWideEditBox = 1,
-					maxLetters = 8192,
-					whileDead = 1,
-					timeout = 0,
-					hideOnEscape = 1,
-					OnShow = function(self)
-						local data = self.data or {}
-						local senderText = tostring(data.sender or "Unknown")
-						local buildText = tostring(data.buildName or "Unknown Build")
-						self.text:SetText(("New submission from %s\nBuild: %s\nCopy below and paste where needed:"):format(senderText, buildText))
-						self.wideEditBox:SetText(tostring(data.submission or ""))
-						self.wideEditBox:SetFocus()
-						self.wideEditBox:HighlightText()
-					end,
-					EditBoxOnEscapePressed = function(self)
-						self:GetParent():Hide()
-					end
-				}
-			end
-			local popupData = {
-				sender = sender,
-				buildName = buildName,
-				submission = submissionText
-			}
-			local dialog = StaticPopup_Show("TALENTED_QT_SUBMISSION_RECEIVED", nil, nil, popupData)
-			if dialog then
-				dialog.data = popupData
-				if dialog.text then
-					dialog.text:SetText(("New submission from %s\nBuild: %s\nCopy below and paste where needed:"):format(
-						tostring(popupData.sender or "Unknown"),
-						tostring(popupData.buildName or "Unknown Build")
-					))
-				end
-				if dialog.wideEditBox then
-					dialog.wideEditBox:SetText(submissionText or "")
-					dialog.wideEditBox:SetFocus()
-					dialog.wideEditBox:HighlightText()
-				end
-			end
-		end
-
-		local function GetQtSubmissionInbox()
-			if not Talented.db or not Talented.db.profile then
-				return {}
-			end
-			Talented.db.profile.qtSubmissionInbox = Talented.db.profile.qtSubmissionInbox or {}
-			return Talented.db.profile.qtSubmissionInbox
-		end
-
-		local function SaveQtSubmissionToInbox(sender, buildName, submissionText)
-			if not IsQtClient() then
-				return
-			end
-			local inbox = GetQtSubmissionInbox()
-			inbox[#inbox + 1] = {
-				sender = TrimText(sender) ~= "" and TrimText(sender) or "Unknown",
-				buildName = TrimText(buildName) ~= "" and TrimText(buildName) or "Unknown Build",
-				submission = tostring(submissionText or ""),
-				receivedAt = time()
-			}
-			local maxEntries = 100
-			while #inbox > maxEntries do
-				table.remove(inbox, 1)
-			end
-		end
-
-		local function BuildQtInboxText()
-			local inbox = GetQtSubmissionInbox()
-			if #inbox == 0 then
-				return "No saved submissions yet."
-			end
-			local out = {}
-			for i = #inbox, 1, -1 do
-				local entry = inbox[i]
-				local stamp = entry.receivedAt and date("%Y-%m-%d %H:%M:%S", entry.receivedAt) or "Unknown time"
-				out[#out + 1] = ("[%s] From: %s | Build: %s"):format(
-					stamp,
-					tostring(entry.sender or "Unknown"),
-					tostring(entry.buildName or "Unknown Build")
-				)
-				out[#out + 1] = tostring(entry.submission or "")
-				out[#out + 1] = ""
-			end
-			return table.concat(out, "\n")
-		end
-
-		local function ShowQtInboxPopup()
-			if not IsQtClient() then
-				Talented:Print("Inbox is only available for %s.", QT_SUBMISSION_TARGET)
-				return
-			end
-			if not StaticPopupDialogs["TALENTED_QT_SUBMISSION_INBOX"] then
-				StaticPopupDialogs["TALENTED_QT_SUBMISSION_INBOX"] = {
-					text = "Saved Qt submissions",
-					button1 = CLOSE,
-					hasEditBox = 1,
-					hasWideEditBox = 1,
-					maxLetters = 32767,
-					whileDead = 1,
-					timeout = 0,
-					hideOnEscape = 1,
-					OnShow = function(self)
-						self.text:SetText("Saved Qt submissions (newest first):")
-						self.wideEditBox:SetText(BuildQtInboxText())
-						self.wideEditBox:SetFocus()
-						self.wideEditBox:HighlightText()
-					end,
-					EditBoxOnEscapePressed = function(self)
-						self:GetParent():Hide()
-					end
-				}
-			end
-			StaticPopup_Show("TALENTED_QT_SUBMISSION_INBOX")
-		end
-
 		local exportBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
 		exportBtn:SetSize(130, 22)
 		exportBtn:SetPoint("BOTTOMLEFT", 24, 18)
@@ -5875,66 +5681,6 @@ do
 			Talented:ImportSynastriaBuildString(input or "")
 		end)
 
-		sendQtBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-		sendQtBtn:SetSize(110, 22)
-		sendQtBtn:SetPoint("LEFT", importBtn, "RIGHT", 8, 0)
-		sendQtBtn:SetText("Send to Qt")
-		sendQtBtn:SetScript("OnClick", function()
-			local submission = TrimText(communityEditBox:GetText())
-			if submission == "" then
-				submission = BuildCurrentCommunityExport()
-			end
-			submission = TrimText(submission)
-			if submission == "" then
-				Talented:Print("Nothing to send. Click Export Both first.")
-				return
-			end
-			EnsureAddonPrefix()
-			local senderName = GetOnlinePlayerName()
-			local buildName = ParseSubmissionName(submission)
-			senderName = senderName:gsub(QT_SUBMISSION_SEP, " ")
-			buildName = buildName:gsub(QT_SUBMISSION_SEP, " ")
-			local submissionId = tostring(GetTime()) .. tostring(math.random(1000, 9999))
-			local totalChunks = math.max(1, math.ceil(string.len(submission) / QT_SUBMISSION_CHUNK_SIZE))
-			local metaMessage = table.concat({
-				"META",
-				submissionId,
-				senderName,
-				buildName,
-				tostring(totalChunks)
-			}, QT_SUBMISSION_SEP)
-			if not SendAddonWhisperMessage(metaMessage) then
-				Talented:Print("Failed to send submission metadata to %s.", QT_SUBMISSION_TARGET)
-				return
-			end
-			for i = 1, totalChunks do
-				local startPos = ((i - 1) * QT_SUBMISSION_CHUNK_SIZE) + 1
-				local endPos = math.min(i * QT_SUBMISSION_CHUNK_SIZE, string.len(submission))
-				local chunk = submission:sub(startPos, endPos)
-				local dataMessage = table.concat({
-					"DATA",
-					submissionId,
-					tostring(i),
-					chunk
-				}, QT_SUBMISSION_SEP)
-				SendAddonWhisperMessage(dataMessage)
-			end
-			qtSendPending = true
-			Talented:Print("Submission sent to %s via addon channel.", QT_SUBMISSION_TARGET)
-		end)
-		UpdateQtSendButtonState()
-
-		local inboxBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-		inboxBtn:SetSize(70, 22)
-		inboxBtn:SetPoint("LEFT", sendQtBtn, "RIGHT", 8, 0)
-		inboxBtn:SetText("Inbox")
-		inboxBtn:SetScript("OnClick", function()
-			ShowQtInboxPopup()
-		end)
-		if not IsQtClient() then
-			inboxBtn:Hide()
-		end
-
 		local closeBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
 		closeBtn:SetSize(90, 22)
 		closeBtn:SetPoint("BOTTOMRIGHT", -16, 18)
@@ -5948,70 +5694,6 @@ do
 		frame.payloadEditBox = payloadEditBox
 		frame.communityEditBox = communityEditBox
 		frame.editBox = payloadEditBox
-		frame.qtSendBtn = sendQtBtn
-		frame.qtInboxBtn = inboxBtn
-		frame.ResetQtSendState = function()
-			qtAvailability = "unknown"
-			qtSendPending = false
-			incomingQtSubmissions = {}
-			UpdateQtSendButtonState()
-		end
-		EnsureAddonPrefix()
-		frame:RegisterEvent("CHAT_MSG_SYSTEM")
-		frame:RegisterEvent("CHAT_MSG_ADDON")
-		local previousOnEvent = frame:GetScript("OnEvent")
-		frame:SetScript("OnEvent", function(self, event, ...)
-			if event == "CHAT_MSG_SYSTEM" and qtSendPending then
-				local msg = ...
-				if IsQtOfflineSystemMessage(msg) then
-					qtAvailability = "offline"
-					qtSendPending = false
-					UpdateQtSendButtonState()
-					Talented:Print("%s appears offline. Send to Qt has been disabled.", QT_SUBMISSION_TARGET)
-				end
-			end
-			if event == "CHAT_MSG_ADDON" then
-				local prefix, message, channel, sender = ...
-				if prefix == QT_SUBMISSION_PREFIX and type(message) == "string" and message ~= "" then
-					local kind = message:match("^(.-)" .. QT_SUBMISSION_SEP)
-					if kind == "META" then
-						local id, author, buildName, totalText = message:match("^META" .. QT_SUBMISSION_SEP .. "(.-)" .. QT_SUBMISSION_SEP .. "(.-)" .. QT_SUBMISSION_SEP .. "(.-)" .. QT_SUBMISSION_SEP .. "(%d+)$")
-						local total = tonumber(totalText) or 0
-						if id and id ~= "" and total > 0 then
-							incomingQtSubmissions[id] = {
-								author = author or sender or "Unknown",
-								sender = sender or "Unknown",
-								buildName = buildName or "Unknown Build",
-								total = total,
-								chunks = {},
-								received = 0
-							}
-						end
-					elseif kind == "DATA" then
-						local id, indexText, chunk = message:match("^DATA" .. QT_SUBMISSION_SEP .. "(.-)" .. QT_SUBMISSION_SEP .. "(%d+)" .. QT_SUBMISSION_SEP .. "(.*)$")
-						local packet = id and incomingQtSubmissions[id]
-						local index = tonumber(indexText)
-						if packet and index and index >= 1 and index <= packet.total and not packet.chunks[index] then
-							packet.chunks[index] = chunk or ""
-							packet.received = packet.received + 1
-							if packet.received >= packet.total then
-								local pieces = {}
-								for i = 1, packet.total do
-									pieces[#pieces + 1] = packet.chunks[i] or ""
-								end
-								local submissionText = table.concat(pieces, "")
-								SaveQtSubmissionToInbox(packet.author, packet.buildName, submissionText)
-								ShowQtSubmissionPopup(packet.author, packet.buildName, submissionText)
-								incomingQtSubmissions[id] = nil
-							end
-						end
-					end
-				end
-			end
-			if previousOnEvent then
-				previousOnEvent(self, event, ...)
-			end
-		end)
 		buildManagerFrame = frame
 		return frame
 	end
@@ -6041,9 +5723,6 @@ do
 		if frame.subCategoryBox and not hasText(frame.subCategoryBox:GetText()) then
 				local authorName = GetOnlinePlayerName()
 				frame.subCategoryBox:SetText(authorName ~= "" and authorName or "Author")
-			end
-			if frame.ResetQtSendState then
-				frame:ResetQtSendState()
 			end
 			frame.payloadEditBox:SetFocus()
 			frame.payloadEditBox:SetCursorPosition(0)
