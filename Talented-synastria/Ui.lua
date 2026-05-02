@@ -2002,7 +2002,7 @@ do
 	local function OpenAnySpecIconPicker(info)
 		if not specIconPicker then
 			specIconPicker = CreateFrame("Frame", "TalentedSpecIconPicker", UIParent)
-			specIconPicker:SetSize(320, 250)
+			specIconPicker:SetSize(320, 282)
 			specIconPicker:SetBackdrop({
 				bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
 				edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -2018,7 +2018,16 @@ do
 			title:SetPoint("TOP", 0, -12)
 			title:SetText("Choose Any Icon")
 
+			local searchEdit = CreateFrame("EditBox", nil, specIconPicker, "InputBoxTemplate")
+			searchEdit:SetSize(288, 20)
+			searchEdit:SetPoint("TOPLEFT", 14, -32)
+			searchEdit:SetAutoFocus(false)
+			searchEdit:SetMaxLetters(160)
+			searchEdit:SetTextInsets(4, 4, 0, 0)
+			specIconPicker.searchEdit = searchEdit
+
 			specIconPicker.icons = {}
+			specIconPicker.allIcons = {}
 			specIconPicker.buttons = {}
 			specIconPicker.page = 1
 			specIconPicker.perPage = 32
@@ -2047,7 +2056,29 @@ do
 				return list
 			end
 
-			local function UpdatePicker()
+			local UpdatePicker
+			local function RebuildSpecIconFilter()
+				local query = searchEdit:GetText() or ""
+				query = query:lower():gsub("^%s+", ""):gsub("%s+$", "")
+				local filtered = {}
+				if query == "" then
+					for i = 1, #specIconPicker.allIcons do
+						filtered[#filtered + 1] = specIconPicker.allIcons[i]
+					end
+				else
+					for i = 1, #specIconPicker.allIcons do
+						local p = specIconPicker.allIcons[i]
+						if type(p) == "string" and p:lower():find(query, 1, true) then
+							filtered[#filtered + 1] = p
+						end
+					end
+				end
+				specIconPicker.icons = filtered
+				specIconPicker.page = 1
+				UpdatePicker()
+			end
+
+			UpdatePicker = function()
 				local startIndex = (specIconPicker.page - 1) * specIconPicker.perPage + 1
 				local totalPages = math.max(1, math.ceil(#specIconPicker.icons / specIconPicker.perPage))
 				if specIconPicker.page > totalPages then
@@ -2072,12 +2103,19 @@ do
 				if specIconPicker.page < totalPages then specIconPicker.nextBtn:Enable() else specIconPicker.nextBtn:Disable() end
 			end
 
+			searchEdit:SetScript("OnTextChanged", function()
+				RebuildSpecIconFilter()
+			end)
+			searchEdit:SetScript("OnEscapePressed", function(self)
+				self:ClearFocus()
+			end)
+
 			for i = 1, specIconPicker.perPage do
 				local btn = CreateFrame("Button", nil, specIconPicker)
 				btn:SetSize(34, 34)
 				local col = bit.band(i - 1, 7)
 				local row = math.floor((i - 1) / 8)
-				btn:SetPoint("TOPLEFT", 18 + col * 36, -34 - row * 38)
+				btn:SetPoint("TOPLEFT", 18 + col * 36, -58 - row * 38)
 				local icon = btn:CreateTexture(nil, "ARTWORK")
 				icon:SetAllPoints(btn)
 				btn.icon = icon
@@ -2119,8 +2157,11 @@ do
 			end)
 
 			specIconPicker.Refresh = function(self)
-				self.icons = CollectIcons()
-				UpdatePicker()
+				self.allIcons = CollectIcons()
+				if self.searchEdit then
+					self.searchEdit:SetText("")
+				end
+				RebuildSpecIconFilter()
 			end
 		end
 		specIconPicker.info = info
