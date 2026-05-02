@@ -5437,7 +5437,7 @@ do
 
 		frame.selectedGuideIcon = ""
 		local picker = CreateFrame("Frame", nil, UIParent)
-		picker:SetSize(300, 220)
+		picker:SetSize(300, 252)
 		picker:SetPoint("CENTER", frame, "CENTER", 0, -4)
 		picker:SetBackdrop({
 			bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -5453,13 +5453,21 @@ do
 		picker:EnableMouse(true)
 		picker:SetToplevel(true)
 		picker:Hide()
-		picker.icons = CollectMacroIcons()
+		picker.allIcons = {}
+		picker.icons = {}
 		picker.page = 1
 		picker.perPage = 24
 
 		local pickerTitle = picker:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		pickerTitle:SetPoint("TOP", 0, -12)
 		pickerTitle:SetText("Select Guide Icon")
+
+		local searchEdit = CreateFrame("EditBox", nil, picker, "InputBoxTemplate")
+		searchEdit:SetSize(268, 20)
+		searchEdit:SetPoint("TOPLEFT", 14, -32)
+		searchEdit:SetAutoFocus(false)
+		searchEdit:SetMaxLetters(160)
+		searchEdit:SetTextInsets(4, 4, 0, 0)
 
 		local function SetPickerNavEnabled(button, enabled)
 			if enabled then
@@ -5477,7 +5485,29 @@ do
 			end
 		end
 
-		local function RefreshIconPicker()
+		local RefreshIconPicker
+		local function RebuildCommunityIconFilter()
+			local query = searchEdit:GetText() or ""
+			query = query:lower():gsub("^%s+", ""):gsub("%s+$", "")
+			local filtered = {}
+			if query == "" then
+				for i = 1, #picker.allIcons do
+					filtered[#filtered + 1] = picker.allIcons[i]
+				end
+			else
+				for i = 1, #picker.allIcons do
+					local p = picker.allIcons[i]
+					if type(p) == "string" and p:lower():find(query, 1, true) then
+						filtered[#filtered + 1] = p
+					end
+				end
+			end
+			picker.icons = filtered
+			picker.page = 1
+			RefreshIconPicker()
+		end
+
+		RefreshIconPicker = function()
 			local startIndex = (picker.page - 1) * picker.perPage + 1
 			local totalPages = math.max(1, math.ceil(#picker.icons / picker.perPage))
 			if picker.page > totalPages then
@@ -5502,13 +5532,20 @@ do
 			SetPickerNavEnabled(picker.nextBtn, picker.page < totalPages)
 		end
 
+		searchEdit:SetScript("OnTextChanged", function()
+			RebuildCommunityIconFilter()
+		end)
+		searchEdit:SetScript("OnEscapePressed", function(self)
+			self:ClearFocus()
+		end)
+
 		picker.buttons = {}
 		for i = 1, picker.perPage do
 			local btn = CreateFrame("Button", nil, picker)
 			btn:SetSize(36, 36)
 			local col = bit.band(i - 1, 7)
 			local row = math.floor((i - 1) / 8)
-			btn:SetPoint("TOPLEFT", 18 + col * 34, -34 - row * 38)
+			btn:SetPoint("TOPLEFT", 18 + col * 34, -58 - row * 38)
 			local icon = btn:CreateTexture(nil, "ARTWORK")
 			icon:SetAllPoints(btn)
 			btn.icon = icon
@@ -5549,12 +5586,16 @@ do
 		pickIconBtn:SetFrameLevel(frame:GetFrameLevel() + 15)
 		pickIconBtn:SetText("Pick...")
 		pickIconBtn:SetScript("OnClick", function()
-			picker.page = 1
-			picker.icons = CollectMacroIcons()
+			picker.allIcons = CollectMacroIcons()
+			searchEdit:SetText("")
 			picker:SetFrameLevel(frame:GetFrameLevel() + 40)
-			RefreshIconPicker()
+			RebuildCommunityIconFilter()
 			picker:Show()
 		end)
+
+		picker.allIcons = CollectMacroIcons()
+		searchEdit:SetText("")
+		RebuildCommunityIconFilter()
 
 		local payloadLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 		payloadLabel:SetPoint("TOPLEFT", iconLabel, "BOTTOMLEFT", 0, -32)
