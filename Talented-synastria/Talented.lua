@@ -858,10 +858,12 @@ function Talented:GetCommunityBuildsForClass(className)
 	end
 
 	ensureBuild(self.communityBuildCatalog.WITCH, {
-		name = "Lulleh's Witch - Soullink Regen Build",
-		url = "WARLOCK,pZAoDmbrAF3aZ53mfC0nr,DRUID,0Fm30Dpa0AZtood3A13wa30bZA,PERKS,P27711W1B2J1424Lo3kLT1b2_3p9Y31141B1312",
+		name = "Lulleh's Witch - Soullink Regen Build (Open World)",
+		description = "",
 		category = "Prestige",
 		subcategory = "Lulleh",
+		icon = "Interface\\Icons\\Spell_Shadow_SoulLeech_3",
+		url = "SUB2,\"Lulleh's Witch - Soullink Regen Build (Open World)\",\"\",\"Prestige\",\"Lulleh\",\"Interface\\Icons\\Spell_Shadow_SoulLeech_3\",\"WARLOCK,pZAoDmbrAF3aZ53mfC0nr,DRUID,0Fm30Dpa0AZtood3A13wa30bZA,PERKS,P27711W1B2K424Lo2IEkLT1b2_3p9Y31122D123\"",
 		baseClass = "WITCH",
 		classes = "WARLOCK,DRUID"
 	})
@@ -1154,6 +1156,136 @@ function Talented:GetCommunityBuildsForClass(className)
 		url = "SUB2,\"Reaper Soulmirror no Voidsac Toc myth Viable\",\"\",\"Reaper\",\"Mcflurry\",\"Interface\\Icons\\Spell_Shadow_SoulLeech_3\",\"WARLOCK,pAtAAnAra5r0p0u0o2maaZt3,PERKS,P2191311BLBEC244Z4xIa2FAu6f92215\"",
 		baseClass = "WARLOCK",
 		classes = "WARLOCK"
+	})
+	ensureBuild(self.communityBuildCatalog.PALADIN, {
+		name = "Lulleh's PvP Sentinel [God Mode]",
+		description = "",
+		category = "Prestige",
+		subcategory = "Lulleh",
+		icon = "Interface\\Icons\\Spell_Nature_LightningShield",
+		url = "SUB2,\"Lulleh's PvP Sentinel [God Mode]\",\"\",\"Prestige\",\"Lulleh\",\"Interface\\Icons\\Spell_Nature_LightningShield\",\"PALADIN,dZZ00010000100a1,SHAMAN,m53qaZ0tv30yBpo0d2n5a,PERKS,P213613111VBGA247W4YNAD1111tCNv51111\"",
+		baseClass = "PALADIN",
+		classes = "PALADIN,SHAMAN"
+	})
+	ensureBuild(self.communityBuildCatalog.DEATHKNIGHT, {
+		name = "Test's Corpse Explosion Cannonball - Bolt-Action",
+		description = "",
+		category = "Prestige",
+		subcategory = "Test",
+		icon = "Interface\\Icons\\Spell_Shadow_CorpseExplode",
+		url = "SUB2,\"Test's Corpse Explosion Cannonball - Bolt-Action\",\"\",\"Prestige\",\"Test\",\"Interface\\Icons\\Spell_Shadow_CorpseExplode\",\"DEATHKNIGHT,PZmttt02o1Z0tmmuDAt0mtAm3,DRUID,0ZRoo33C1AwcmmBr1Ar,PERKS,P24151311CKB2A8JEb3lJs2J1b2_4qA111m1113\"",
+		baseClass = "DEATHKNIGHT",
+		classes = "DEATHKNIGHT,DRUID"
+	})
+	ensureBuild(self.communityBuildCatalog.DEATHKNIGHT, {
+		name = "Test's Corpse Explosion Cannonball - Semi-Auto",
+		description = "",
+		category = "Prestige",
+		subcategory = "Test",
+		icon = "Interface\\Icons\\Spell_Shadow_AntiMagicShell",
+		url = "SUB2,\"Test's Corpse Explosion Cannonball - Semi-Auto\",\"\",\"Prestige\",\"Test\",\"Interface\\Icons\\Spell_Shadow_AntiMagicShell\",\"DEATHKNIGHT,PZmttt02o1Z0tmmuDAt0mtAm3,DRUID,0ZRoo33C1AwcmmBr1Ar,PERKS,P24151311CKB2A8JEb3kJ1s2J1b2_4qA11n1113\"",
+		baseClass = "DEATHKNIGHT",
+		classes = "DEATHKNIGHT,DRUID"
+	})
+	ensureBuild(self.communityBuildCatalog.WARRIOR, {
+		name = "Lulleh's Butcher - Fury (Zero Compromise)",
+		description = "",
+		category = "Prestige",
+		subcategory = "Lulleh",
+		icon = "Interface\\Icons\\Ability_Warrior_Cleave",
+		url = "SUB2,\"Lulleh's Butcher - Fury (Zero Compromise)\",\"\",\"Prestige\",\"Lulleh\",\"Interface\\Icons\\Ability_Warrior_Cleave\",\"WARRIOR,MZ000000100a0b,DEATHKNIGHT,PAym50ap3Ac0aZo0aZAtmmMD0v,PERKS,P231A12AF6BW1S3Y21f32c1iIi12-5Cx5p33KP127\"",
+		baseClass = "WARRIOR",
+		classes = "WARRIOR,DEATHKNIGHT"
+	})
+	ensureBuild(self.communityBuildCatalog.MAGE, {
+		name = "Lulleh's Conjurer - Arcane (Magic Barbarian)",
+		description = "",
+		category = "Prestige",
+		subcategory = "Lulleh",
+		icon = "Interface\\Icons\\Spell_Arcane_ArcaneTorrent",
+		url = "SUB2,\"Lulleh's Conjurer - Arcane (Magic Barbarian)\",\"\",\"Prestige\",\"Lulleh\",\"Interface\\Icons\\Spell_Arcane_ArcaneTorrent\",\"MAGE,aD2BAmAD1wmncu3BZAp3ma3,DRUID,000000000100001,PERKS,P246411282KB2IZ1v4Z2k4dDNJ1b2e4-C131E213\"",
+		baseClass = "MAGE",
+		classes = "MAGE,DRUID"
+	})
+	ensureBuild(self.communityBuildCatalog.PALADIN, {
+		name = "Lulleh's Martyr (Double Shadow)",
+		description = "",
+		category = "Prestige",
+		subcategory = "Lulleh",
+		icon = "Interface\\Icons\\Spell_Holy_SealOfSacrifice",
+		url = "SUB2,\"Lulleh's Martyr (Double Shadow)\",\"\",\"Prestige\",\"Lulleh\",\"Interface\\Icons\\Spell_Holy_SealOfSacrifice\",\"PALADIN,dZyo1ramZtD0tCp1o1pA3,PRIEST,A53AmZ3ZotAFaDbADfD1ra,PERKS,P211711311T3BE66247pP5q1s31211x31211\"",
+		baseClass = "PALADIN",
+		classes = "PALADIN,PRIEST"
+	})
+	ensureBuild(self.communityBuildCatalog.WARRIOR, {
+		name = "Lulleh's Prot (Farm Build)",
+		description = "",
+		category = "Protection",
+		subcategory = "Lulleh",
+		icon = "Interface\\Icons\\Ability_Warrior_ShieldWall",
+		url = "SUB2,\"Lulleh's Prot (Farm Build)\",\"\",\"Protection\",\"Lulleh\",\"Interface\\Icons\\Ability_Warrior_ShieldWall\",\"WARRIOR,M52m0DZmZ50uCv3AFAp1doa,PERKS,P2271131R33BQ67x2k3111iJk18zBY48\"",
+		baseClass = "WARRIOR",
+		classes = "WARRIOR"
+	})
+	ensureBuild(self.communityBuildCatalog.WARRIOR, {
+		name = "Miri's Honeybadger",
+		description = "",
+		category = "Arms",
+		subcategory = "Miri",
+		icon = "Interface\\Icons\\Ability_Warrior_Pummel",
+		url = "SUB2,\"Miri's Honeybadger\",\"\",\"Arms\",\"Miri\",\"Interface\\Icons\\Ability_Warrior_Pummel\",\"WARRIOR,M50D1Dpu0A2c0cZmtt0t51aw,PERKS,P2A141BF6BS4S1b2b1i3iIi12kF1115P\"",
+		baseClass = "WARRIOR",
+		classes = "WARRIOR"
+	})
+	ensureBuild(self.communityBuildCatalog.WARRIOR, {
+		name = "Lulleh's Fury (Aug WW w/ Free Will)",
+		description = "",
+		category = "Fury",
+		subcategory = "Lulleh",
+		icon = "Interface\\Icons\\Ability_Warrior_Whirlwind",
+		url = "SUB2,\"Lulleh's Fury (Aug WW w/ Free Will)\",\"\",\"Fury\",\"Lulleh\",\"Interface\\Icons\\Ability_Warrior_Whirlwind\",\"WARRIOR,M50D0DmZo0t0y51awc5ara,PERKS,P2371311191F6BW1X3c1a22oJi12-5d6n32N\"",
+		baseClass = "WARRIOR",
+		classes = "WARRIOR"
+	})
+	ensureBuild(self.communityBuildCatalog.WARRIOR, {
+		name = "Lulleh's Fury (Aug WW w/ Adaptation)",
+		description = "",
+		category = "Fury",
+		subcategory = "Lulleh",
+		icon = "Interface\\Icons\\Ability_Warrior_Bloodthirst",
+		url = "SUB2,\"Lulleh's Fury (Aug WW w/ Adaptation)\",\"\",\"Fury\",\"Lulleh\",\"Interface\\Icons\\Ability_Warrior_Bloodthirst\",\"WARRIOR,M50D0DmZo0t0y51awc5ara,PERKS,P2371311191F6BS4X3c1a22-K2-5d6n32N\"",
+		baseClass = "WARRIOR",
+		classes = "WARRIOR"
+	})
+	ensureBuild(self.communityBuildCatalog.WARRIOR, {
+		name = "Lulleh's Fury (Tough as Nails w/ Free Will)",
+		description = "",
+		category = "Fury",
+		subcategory = "Lulleh",
+		icon = "Interface\\Icons\\Ability_Warrior_ShieldMastery",
+		url = "SUB2,\"Lulleh's Fury (Tough as Nails w/ Free Will)\",\"\",\"Fury\",\"Lulleh\",\"Interface\\Icons\\Ability_Warrior_ShieldMastery\",\"WARRIOR,M50D0DmZo0t0y51awc5ara,PERKS,P2371311191F6BW1X3c1a22oJi12-5d6n35K\"",
+		baseClass = "WARRIOR",
+		classes = "WARRIOR"
+	})
+	ensureBuild(self.communityBuildCatalog.WARRIOR, {
+		name = "Lulleh's Fury (Tough as Nails w/ Adaptation)",
+		description = "",
+		category = "Fury",
+		subcategory = "Lulleh",
+		icon = "Interface\\Icons\\Ability_Warrior_DefensiveStance",
+		url = "SUB2,\"Lulleh's Fury (Tough as Nails w/ Adaptation)\",\"\",\"Fury\",\"Lulleh\",\"Interface\\Icons\\Ability_Warrior_DefensiveStance\",\"WARRIOR,M50D0DmZo0t0y51awc5ara,PERKS,P2371311191F6BS4X3c1a22-K2-5d6n35K\"",
+		baseClass = "WARRIOR",
+		classes = "WARRIOR"
+	})
+	ensureBuild(self.communityBuildCatalog.WITCH, {
+		name = "Mortus' PvP Witch - Affliction Boomkin",
+		description = "",
+		category = "Prestige",
+		subcategory = "Mortus",
+		icon = "Interface\\Icons\\Spell_Nature_StarFall",
+		url = "SUB2,\"Mortus' PvP Witch - Affliction Boomkin\",\"\",\"Prestige\",\"Mortus\",\"Interface\\Icons\\Spell_Nature_StarFall\",\"WARLOCK,p3t21nCnb5r0pbu0oAmaZt3,DRUID,0y2AnFpa3Bmo10n5AoZAta,PERKS,P2m1DpQT1\"",
+		baseClass = "WITCH",
+		classes = "WARLOCK,DRUID"
 	})
 
 	self.communityBuildCatalog[className] = self.communityBuildCatalog[className] or {}
