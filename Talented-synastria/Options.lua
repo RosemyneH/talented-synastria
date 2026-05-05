@@ -33,8 +33,8 @@ local function BuildSynastriaDefaultPerksOptionArgs()
 	local args = {
 		master = {
 			type = "toggle",
-			name = L["Apply default Synastria perks on login"],
-			desc = L["When enabled, the toggles below are applied after Synastria data is ready. Only enables perks that are off; nothing is turned off."],
+			name = L["Apply default Synastria perks with presets"],
+			desc = L["When enabled, the toggles below run when you import a Synastria build/preset or SBM perk string (not on login). Only enables perks that are off; nothing is turned off."],
 			order = 1,
 			width = "full",
 			get = function()
@@ -56,7 +56,7 @@ local function BuildSynastriaDefaultPerksOptionArgs()
 		args["simple_" .. entry.id] = {
 			type = "toggle",
 			name = entry.name,
-			desc = L["Try to enable this perk on login if it is off (uses the same click queue as build import)."],
+			desc = L["When importing a build/preset, try to enable this perk if it is off (same click queue as build import)."],
 			order = order,
 			width = "full",
 			arg = entry.id,
@@ -317,7 +317,7 @@ Talented.options = {
 		},
 		synastria_defaults = {
 			name = L["Synastria defaults"],
-			desc = L["Default Synastria perks and PerkOptions applied on login."],
+			desc = L["Default Synastria perks and PerkOptions applied when importing builds/presets."],
 			type = "group",
 			order = 100,
 			args = BuildSynastriaDefaultPerksOptionArgs()

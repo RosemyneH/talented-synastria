@@ -74,21 +74,18 @@ end
 
 function Talented:RunDeferredSynastriaInit()
 	if self:IsCustomTalentEnvironment() and not self:IsSynastriaDataReady() then
-		print("Talented:RunDeferredSynastriaInit: not ready")
+		--print("Talented:RunDeferredSynastriaInit: not ready")
 		return
 	end
-	print("Talented:RunDeferredSynastriaInit: ready")
+	--print("Talented:RunDeferredSynastriaInit: ready")
 	self:MigrateSpecNames()
 	self:UpdatePlayerSpecs()
-	print("Talented:RunDeferredSynastriaInit: updated specs")
+	--print("Talented:RunDeferredSynastriaInit: updated specs")
 	if self.base and self.base.perkTab then
 		self:AddPerksToFrame(self.base)
-		print("Talented:RunDeferredSynastriaInit: added perks")
+		--print("Talented:RunDeferredSynastriaInit: added perks")
 	end
-	if self.ApplySynastriaDefaultPerks then
-		self:ApplySynastriaDefaultPerks()
-	end
-	print("Talented:RunDeferredSynastriaInit: finished")
+	--print("Talented:RunDeferredSynastriaInit: finished")
 end
 
 function Talented:QueueDeferredSynastriaInit()
@@ -4775,15 +4772,18 @@ do
 		return true
 	end
 
-	function Talented:ApplySynastriaDefaultPerks()
+	function Talented:EnqueueSynastriaDefaultPerks()
 		if not self:IsCustomTalentEnvironment() or not self:IsSynastriaDataReady() then
-			return
+			return false
 		end
 		local cfg = self.db.profile.synastria_default_perks
 		if not cfg or not cfg.enabled then
-			return
+			return false
 		end
 		local changePerkOption = _G.ChangePerkOption
+		if cfg.prestige_attune_mastery_excess_only then
+			ChangePerkOption("Prestige: Attune Mastery", "Excess Only", true, false)
+		end
 		if type(changePerkOption) == "function" then
 			for name, on in pairs(cfg.automatic_buffs or {}) do
 				if on then
@@ -4813,9 +4813,7 @@ do
 				queued = true
 			end
 		end
-		if queued then
-			StartBuildQueue()
-		end
+		return queued
 	end
 
 	local function BuildTemplateFromCache(self, className, specCache)
@@ -5714,6 +5712,7 @@ do
 			if foundPerksMarker and (hasTalentWork or hasPerkWork or hasBmWork or hasSageWork) then
 				local perkChanges = 0
 				ClearBuildQueue()
+				self:EnqueueSynastriaDefaultPerks()
 				if perkLine and perkLine ~= "" then
 					perkChanges = self:QueuePerkImport(perkLine)
 				end
@@ -5760,6 +5759,7 @@ do
 		end
 
 		local perkChanges = 0
+		self:EnqueueSynastriaDefaultPerks()
 		if perkLine and perkLine ~= "" then
 			perkChanges = self:QueuePerkImport(perkLine)
 		end
@@ -5782,6 +5782,7 @@ do
 			return
 		end
 		ClearQueue()
+		Talented:EnqueueSynastriaDefaultPerks()
 		local changeCount = Talented:QueuePerkImport(importString)
 		if changeCount == 0 then
 			Talented:Print("Perks are already configured correctly.")
