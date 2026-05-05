@@ -40,7 +40,7 @@
 -- @class file
 -- @name AceDB-3.0.lua
 -- @release $Id: AceDB-3.0.lua 940 2010-06-19 08:01:47Z nevcairiel $
-local ACEDB_MAJOR, ACEDB_MINOR = "AceDB-3.0", 21
+local ACEDB_MAJOR, ACEDB_MINOR = "AceDB-3.0", 22
 local AceDB, oldminor = LibStub:NewLibrary(ACEDB_MAJOR, ACEDB_MINOR)
 
 if not AceDB then return end -- No upgrade needed
@@ -254,16 +254,22 @@ local preserve_keys = {
 	["children"] = true,
 }
 
-local realmKey = GetRealmName()
-local guid = type(UnitGUID) == "function" and UnitGUID("player") or nil
-local charKey = (type(guid) == "string" and guid ~= "") and guid or (UnitName("player") .. " - " .. realmKey)
-local _, classKey = UnitClass("player")
-local _, raceKey = UnitRace("player")
-local factionKey = UnitFactionGroup("player")
-local factionrealmKey = factionKey .. " - " .. realmKey
+local function resolvePlayerDBKeys()
+	local realmKey = GetRealmName()
+	local guid = type(UnitGUID) == "function" and UnitGUID("player") or nil
+	local charKey = (type(guid) == "string" and guid ~= "") and guid
+		or ((UnitName("player") or UNKNOWN) .. " - " .. realmKey)
+	local _, classKey = UnitClass("player")
+	local _, raceKey = UnitRace("player")
+	local factionKey = UnitFactionGroup("player")
+	local factionrealmKey = factionKey .. " - " .. realmKey
+	return realmKey, charKey, classKey, raceKey, factionKey, factionrealmKey
+end
+
 -- Actual database initialization function
 local function initdb(sv, defaults, defaultProfile, olddb, parent)
 	-- Generate the database keys for each section
+	local realmKey, charKey, classKey, raceKey, factionKey, factionrealmKey = resolvePlayerDBKeys()
 
 	-- map "true" to our "Default" profile
 	if defaultProfile == true then defaultProfile = "Default" end
@@ -444,7 +450,7 @@ function DBObjectLib:SetProfile(name)
 	-- if the storage exists, save the new profile
 	-- this won't exist on namespaces.
 	if self.sv.profileKeys then
-		self.sv.profileKeys[charKey] = name
+		self.sv.profileKeys[self.keys.char] = name
 	end
 
 	-- populate to child namespaces
