@@ -909,7 +909,7 @@ function Talented:GetCommunityBuildsForClass(className)
 		category = "Prestige",
 		subcategory = "Lulleh",
 		icon = "Interface\\Icons\\Spell_Shadow_SoulLeech_3",
-		url = "SUB2,\"Lulleh's Witch - Soullink Regen Build (Open World)\",\"\",\"Prestige\",\"Lulleh\",\"Interface\\Icons\\Spell_Shadow_SoulLeech_3\",\"WARLOCK,pZAoDmbrAF3aZ53mfC0nr,DRUID,0Fm30Dpa0AZtood3A13wa30bZA,PERKS,P27711W1B2K424Lo2IEkLT1b2_3p9Y31122D123\"",
+		url = "SUB2,\"Lulleh's Witch - Soullink Regen Build (Open World)\",\"\",\"Prestige\",\"Lulleh\",\"Interface\\Icons\\Spell_Shadow_SoulLeech_3\",\"DRUID,0Fm30Dpa0AZtood3A13wa30bZA,WARLOCK,pZAoDmbrAF3aZ53mfC0nr,SAGE,SG20lsk1lsk10lsk1qyk10vtk1,PERKS,P24371X1B2J524Lo2IYH1JI11116Ad1S1P3T1s1FVc2Q3GFn8k11116h1112375132Y1\"",
 		baseClass = "WITCH",
 		classes = "WARLOCK,DRUID"
 	})
@@ -919,7 +919,7 @@ function Talented:GetCommunityBuildsForClass(className)
 		category = "Prestige",
 		subcategory = "Lulleh",
 		icon = "Interface\\Icons\\Ability_Whirlwind",
-		url = "SUB2,\"Bladestorm to Win!\",\"Bladestorm then Execute!\",\"Prestige\",\"Qt\",\"Interface\\Icons\\Ability_Whirlwind\",\"WARRIOR,M5Am1Dpu0AAc1onFamZAmt0t,DRUID,0Z5Aod3C1Dwcpm1rbAr01,PERKS,P2A132H933B2AK7x2b1hM1b2wAb3111CMY21121\"",
+		url = "SUB2,\"Bladestorm to Win!\",\"Bladestorm then Execute!\",\"Prestige\",\"Qt\",\"Interface\\Icons\\Ability_Whirlwind\",\"WARRIOR,M5Am1Dpu0AAc1onFamZAmt0t,DRUID,0Z5Aod3C1Dwcpm1rbAr01,SAGE,SG2fhk1mq1fhk10fhk1iwj100,PERKS,P2A132H933B2AK7x2b1qG1JI11116Ad1K9PW11s1FVc2TGFv5b3111CI11115v141121\"",
 		baseClass = "BARBARIAN",
 		classes = "WARRIOR,DRUID"
 	})
@@ -979,7 +979,7 @@ function Talented:GetCommunityBuildsForClass(className)
 		category = "Prestige",
 		subcategory = "Fae",
 		icon = "Interface\\Icons\\Spell_Frost_IceStorm",
-		url = "SUB2,\"Big Fuckin Blizzard\",\"\",\"Prestige\",\"Fae\",\"Interface\\Icons\\Spell_Frost_IceStorm\",\"DRUID,0f2AnFp02Bmrb0A5AoZAt30A,MAGE,aD3A3mA21vmnot1AZmp0DdAm,SAGE,SG2yzf1yzf1yzf1guByzf100guB,PERKS,P2136411W1B2I24DEv4111m6dDNJ1b2uC\"",
+		url = "SUB2,\"Big Fuckin Blizzard\",\"\",\"Prestige\",\"Fae\",\"Interface\\Icons\\Spell_Frost_IceStorm\",\"DRUID,0f2AnFp02Bmrb0A5AoZAt30A,MAGE,aD3A3mA21vmnot1AZmp0DdAm,SAGE,SG2yzf1yzf1yzf1guByzf100guB,PERKS,P2136411W1B2I24DEv4111m6w81JI11116Ad1R2FAB2J1s1FVc2TGFt7e21116v141111b1\"",
 		baseClass = "MAGE",
 		classes = "MAGE,DRUID"
 	})
