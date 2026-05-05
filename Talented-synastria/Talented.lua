@@ -4463,6 +4463,43 @@ do
 		_G[addonName] = SBM
 	end
 	local BUILD_VERSION = "SBM1"
+	local SAGE_PERK_IDS = {1561, 1562, 1563, 1564, 1565, 1566, 1567, 1568}
+
+	local function SafeGetHunterBmMask()
+		if type(_G.GetHunterBM) ~= "function" then
+			return nil
+		end
+		local ok, v = pcall(_G.GetHunterBM)
+		if not ok or v == nil then
+			return nil
+		end
+		v = tonumber(v) or 0
+		if v < 0 then
+			v = 0
+		end
+		return v
+	end
+
+	local function CollectSynastriaSageSpells()
+		if type(_G.GetDruidSpec) ~= "function" then
+			return nil
+		end
+		local spells = {}
+		for i = 1, #SAGE_PERK_IDS do
+			local perkId = SAGE_PERK_IDS[i]
+			local ok, sid = pcall(_G.GetDruidSpec, perkId)
+			if not ok then
+				return nil
+			end
+			sid = tonumber(sid) or 0
+			if sid < 0 then
+				sid = 0
+			end
+			spells[i] = sid
+		end
+		return spells
+	end
+
 	local ActionTypes = {
 		CALL = "call",
 		DELAY = "delay",
@@ -4485,6 +4522,42 @@ do
 			type = actionType,
 			data = data or {}
 		}
+	end
+
+	local function QueueSynastriaSageImport(spellSlots)
+		if type(spellSlots) ~= "table" then
+			return
+		end
+		for i = 1, #SAGE_PERK_IDS do
+			local spellId = tonumber(spellSlots[i]) or 0
+			if spellId > 0 then
+				local perkId = SAGE_PERK_IDS[i]
+				QueueBuildAction(ActionTypes.CALL, {fn = function()
+					if type(_G.ChangeDruidSpec) == "function" then
+						pcall(_G.ChangeDruidSpec, perkId, spellId)
+					end
+				end})
+				QueueBuildAction(ActionTypes.DELAY, {duration = 0.02})
+			end
+		end
+	end
+
+	local function QueueSynastriaBmImport(mask)
+		mask = tonumber(mask) or 0
+		if mask <= 0 then
+			return
+		end
+		QueueBuildAction(ActionTypes.CALL, {fn = function()
+			if type(_G.ChangeHunterBM) == "function" then
+				pcall(_G.ChangeHunterBM, mask)
+			end
+		end})
+		QueueBuildAction(ActionTypes.DELAY, {duration = 0.05})
+		QueueBuildAction(ActionTypes.CALL, {fn = function()
+			if type(_G.UpdateHunterBM) == "function" then
+				pcall(_G.UpdateHunterBM)
+			end
+		end})
 	end
 
 	local function ClearBuildQueue()
@@ -5031,6 +5104,58 @@ do
 		return table.concat(ids, ",")
 	end
 
+	function Talented:EncodeBmPayload(mask)
+		mask = tonumber(mask) or 0
+		if mask <= 0 then
+			return ""
+		end
+		return "BM2" .. EncodeVarint32(mask)
+	end
+
+	function Talented:DecodeBmPayload(payload)
+		if not payload or payload == "" then
+			return nil
+		end
+		if payload:sub(1, 3) ~= "BM2" then
+			return nil
+		end
+		local body = payload:sub(4)
+		if body == "" then
+			return nil
+		end
+		local vals = DecodeVarint32Stream(body)
+		if not vals or #vals < 1 then
+			return nil
+		end
+		return vals[1]
+	end
+
+	function Talented:EncodeSagePayload(spells)
+		if type(spells) ~= "table" then
+			return ""
+		end
+		local chunks = {}
+		for i = 1, #SAGE_PERK_IDS do
+			chunks[#chunks + 1] = EncodeVarint32(tonumber(spells[i]) or 0)
+		end
+		return "SG2" .. table.concat(chunks, "")
+	end
+
+	function Talented:DecodeSagePayload(payload)
+		if not payload or payload == "" then
+			return nil
+		end
+		if payload:sub(1, 3) ~= "SG2" then
+			return nil
+		end
+		local body = payload:sub(4)
+		local vals = DecodeVarint32Stream(body)
+		if not vals or #vals ~= #SAGE_PERK_IDS then
+			return nil
+		end
+		return vals
+	end
+
 	function Talented:ExportDualClassTalents()
 		self:UpdatePlayerSpecs()
 		local lines = {}
@@ -5383,7 +5508,35 @@ do
 			end
 		end
 
-		local perkData = self:EncodePerkPayload(self:ExportPerksString() or "")
+		local bmMask = SafeGetHunterBmMask()
+		if bmMask and bmMask ~= 0 then
+			local bmEnc = self:EncodeBmPayload(bmMask)
+			if bmEnc ~= "" then
+				tokens[#tokens + 1] = "BM"
+				tokens[#tokens + 1] = bmEnc
+			end
+		end
+
+		local sageSpells = CollectSynastriaSageSpells()
+		local sageHasData = false
+		if sageSpells then
+			for si = 1, #sageSpells do
+				if (sageSpells[si] or 0) > 0 then
+					sageHasData = true
+					break
+				end
+			end
+		end
+		if sageHasData then
+			local sageEnc = self:EncodeSagePayload(sageSpells)
+			if sageEnc ~= "" then
+				tokens[#tokens + 1] = "SAGE"
+				tokens[#tokens + 1] = sageEnc
+			end
+		end
+
+		local perkCsv = self:ExportPerksString() or ""
+		local perkData = self:EncodePerkPayload(perkCsv)
 		tokens[#tokens + 1] = "PERKS"
 		tokens[#tokens + 1] = perkData
 		return table.concat(tokens, ",")
@@ -5511,25 +5664,54 @@ do
 			local perkLine
 			local talentLines = {}
 			local foundPerksMarker = false
+			local bmMaskDecoded = nil
+			local sageSlotsDecoded = nil
 			local i = 1
 			while i <= #tokens do
 				local token = tokens[i]
-				if token:upper() == "PERKS" then
+				local up = token:upper()
+				if up == "PERKS" then
 					foundPerksMarker = true
 					perkLine = self:DecodePerkPayload(tokens[i + 1] or "")
 					break
 				end
-				local className = token:upper()
-				local code = tokens[i + 1]
-				if not code then
-					break
+				if up == "BM" then
+					local enc = tokens[i + 1]
+					if enc then
+						bmMaskDecoded = self:DecodeBmPayload(enc)
+					end
+					i = i + 2
+				elseif up == "SAGE" then
+					local enc = tokens[i + 1]
+					if enc then
+						sageSlotsDecoded = self:DecodeSagePayload(enc)
+					end
+					i = i + 2
+				else
+					local className = up
+					local code = tokens[i + 1]
+					if not code then
+						break
+					end
+					if self.spelldata and self.spelldata[className] then
+						talentLines[#talentLines + 1] = className .. ":" .. code
+					end
+					i = i + 2
 				end
-				if self.spelldata and self.spelldata[className] then
-					talentLines[#talentLines + 1] = className .. ":" .. code
-				end
-				i = i + 2
 			end
-			if foundPerksMarker and (#talentLines > 0 or (perkLine and perkLine ~= "")) then
+			local hasPerkWork = perkLine and perkLine ~= ""
+			local hasTalentWork = #talentLines > 0
+			local hasBmWork = bmMaskDecoded and bmMaskDecoded > 0
+			local hasSageWork = false
+			if sageSlotsDecoded then
+				for sj = 1, #sageSlotsDecoded do
+					if (sageSlotsDecoded[sj] or 0) > 0 then
+						hasSageWork = true
+						break
+					end
+				end
+			end
+			if foundPerksMarker and (hasTalentWork or hasPerkWork or hasBmWork or hasSageWork) then
 				local perkChanges = 0
 				ClearBuildQueue()
 				if perkLine and perkLine ~= "" then
@@ -5538,6 +5720,12 @@ do
 				local importedTalents = false
 				if #talentLines > 0 then
 					importedTalents = self:ImportDualClassTalents(table.concat(talentLines, "\n"))
+				end
+				if hasSageWork and sageSlotsDecoded then
+					QueueSynastriaSageImport(sageSlotsDecoded)
+				end
+				if hasBmWork and bmMaskDecoded then
+					QueueSynastriaBmImport(bmMaskDecoded)
 				end
 				QueueBuildAction(ActionTypes.COMPLETE, {
 					message = ("Synastria build import queued (perk changes: %d, talents: %s)."):format(perkChanges, importedTalents and "yes" or "no")
