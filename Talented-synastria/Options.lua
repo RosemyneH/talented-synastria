@@ -22,6 +22,7 @@ local function BuildSynastriaDefaultPerksDefaults()
 	end
 	return {
 		enabled = true,
+		prestige_attune_mastery_excess_only = true,
 		simple_ids = simple_ids,
 		automatic_buffs = automatic_buffs,
 		misc_options = misc_options,
@@ -149,6 +150,26 @@ local function BuildSynastriaDefaultPerksOptionArgs()
 			end
 		}
 	end
+	order = order + 1
+	args.h_prestige = {
+		type = "header",
+		name = L["Prestige (PerkOption)"],
+		order = order
+	}
+	order = order + 1
+	args.prestige_attune_mastery_excess_only = {
+		type = "toggle",
+		name = L["Prestige: Attune Mastery — Excess Only"],
+		desc = L["When importing a build/preset, runs ChangePerkOption(\"Prestige: Attune Mastery\", \"Excess Only\", true, false)."],
+		order = order,
+		width = "full",
+		get = function()
+			return Talented.db.profile.synastria_default_perks.prestige_attune_mastery_excess_only
+		end,
+		set = function(_, v)
+			Talented.db.profile.synastria_default_perks.prestige_attune_mastery_excess_only = v and true or false
+		end
+	}
 	return args
 end
 
