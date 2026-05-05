@@ -85,6 +85,9 @@ function Talented:RunDeferredSynastriaInit()
 		self:AddPerksToFrame(self.base)
 		print("Talented:RunDeferredSynastriaInit: added perks")
 	end
+	if self.ApplySynastriaDefaultPerks then
+		self:ApplySynastriaDefaultPerks()
+	end
 	print("Talented:RunDeferredSynastriaInit: finished")
 end
 
@@ -4618,9 +4621,6 @@ do
 			local perkFrame = children[i]
 			if perkFrame and perkFrame.perk and perkFrame.perk.id then
 				local perkId = perkFrame.perk.id
-				if perkId == 1042 then
-					break
-				end
 				perks[#perks + 1] = {
 					id = perkId,
 					active = GetPerkActiveState(perkId),
@@ -4688,6 +4688,61 @@ do
 			changeCount = changeCount + 1
 		end
 		return changeCount
+	end
+
+	local function QueueEnablePerkByIdIfInactive(perkId, perksById)
+		local perk = perksById[perkId]
+		if not perk or perk.active then
+			return false
+		end
+		QueueBuildAction(ActionTypes.CLICK_PERK, {position = perk.position})
+		QueueBuildAction(ActionTypes.DELAY, {duration = 0.01})
+		QueueBuildAction(ActionTypes.CLICK_TOGGLE, {})
+		QueueBuildAction(ActionTypes.DELAY, {duration = 0.01})
+		return true
+	end
+
+	function Talented:ApplySynastriaDefaultPerks()
+		if not self:IsCustomTalentEnvironment() or not self:IsSynastriaDataReady() then
+			return
+		end
+		local cfg = self.db.profile.synastria_default_perks
+		if not cfg or not cfg.enabled then
+			return
+		end
+		local changePerkOption = _G.ChangePerkOption
+		if type(changePerkOption) == "function" then
+			for name, on in pairs(cfg.automatic_buffs or {}) do
+				if on then
+					pcall(changePerkOption, "Automatic Buffs", name, true, false)
+				end
+			end
+			for name, on in pairs(cfg.misc_options or {}) do
+				if on then
+					pcall(changePerkOption, "Misc Options", name, true, false)
+				end
+			end
+			for name, on in pairs(cfg.tracking or {}) do
+				if on then
+					pcall(changePerkOption, "Tracking", name, true, false)
+				end
+			end
+		end
+		local perks = self:GetAllSynastriaPerks()
+		local perksById = {}
+		for _, perk in ipairs(perks) do
+			perksById[perk.id] = perk
+		end
+		local queued = false
+		for id, on in pairs(cfg.simple_ids or {}) do
+			id = tonumber(id)
+			if id and on and QueueEnablePerkByIdIfInactive(id, perksById) then
+				queued = true
+			end
+		end
+		if queued then
+			StartBuildQueue()
+		end
 	end
 
 	local function BuildTemplateFromCache(self, className, specCache)
