@@ -99,3 +99,14 @@ L["WARNING: Talented has detected that its talent data is outdated. Talented wil
 L["You can edit the name of the template here. You must press the Enter key to save your changes."] = true
 L["You have %d talent |4point:points; left"] = true
 L["No community builds configured yet."] = true
+L["Synastria defaults"] = true
+L["Default Synastria perks and PerkOptions applied on login."] = true
+L["Apply default Synastria perks on login"] = true
+L["When enabled, the toggles below are applied after Synastria data is ready. Only enables perks that are off; nothing is turned off."] = true
+L["Perks (by ID)"] = true
+L["Try to enable this perk on login if it is off (uses the same click queue as build import)."] = true
+L["Automatic Buffs (PerkOptions)"] = true
+L["Call ChangePerkOption for this sub-option when enabled."] = true
+L["Misc Options (PerkOptions)"] = true
+L["Tracking (PerkOptions)"] = true
+L["Call ChangePerkOption for Tracking when enabled."] = true

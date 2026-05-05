@@ -25,6 +25,45 @@ function Talented:GetClassIdByName(className)
 	return CLASS_ID_BY_NAME[className]
 end
 
+Talented.SYNASTRIA_DEFAULT_PERK_SIMPLE = {
+	{id = 1042, name = "Automatic Bank"},
+	{id = 855, name = "Automatic Fishing"},
+	{id = 996, name = "Automatic Next Melee"},
+	{id = 1602, name = "Automatic Shapeshift"},
+	{id = 1157, name = "Disable Item Refund"},
+	{id = 909, name = "Dungeon Event Speedup"},
+	{id = 806, name = "Instant Windrider"},
+	{id = 778, name = "Less Annoying Buffs"},
+	{id = 816, name = "Weapon Enchant Duration"},
+	{id = 758, name = "Tracking"}
+}
+
+Talented.SYNASTRIA_DEFAULT_AUTOMATIC_BUFFS = {
+	"DK: Horn of Winter",
+	"Druid: Mark of the Wild",
+	"Druid: Thorns",
+	"Mage: Arcane Intellect",
+	"Paladin: Blessing of Kings",
+	"Priest: Divine Spirit",
+	"Priest: Fortitude",
+	"Priest: Shadow Protection",
+	"Shaman: Water Breathing",
+	"Warlock: Detect Invisibility",
+	"Warrior: Commanding Shout"
+}
+
+Talented.SYNASTRIA_DEFAULT_MISC_OPTIONS = {
+	"AH Attunable",
+	"Notify WG",
+	"Always Show Affix",
+	"Stop Crafting if Forged",
+	"Notify on Forged",
+	"Don't allow destroy favorited",
+	"AH hide attuned"
+}
+
+Talented.SYNASTRIA_DEFAULT_TRACKING = {"Minerals", "Herbs"}
+
 function Talented:IsSynastriaDataReady()
 	if type(GetCustomGameData) ~= "function" then
 		return true

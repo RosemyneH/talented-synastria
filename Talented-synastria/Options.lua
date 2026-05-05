@@ -3,6 +3,155 @@ local L = LibStub("AceLocale-3.0"):GetLocale("Talented")
 
 Talented.max_talent_points = 71
 
+local function BuildSynastriaDefaultPerksDefaults()
+	local simple_ids = {}
+	for _, entry in ipairs(Talented.SYNASTRIA_DEFAULT_PERK_SIMPLE) do
+		simple_ids[entry.id] = true
+	end
+	local automatic_buffs = {}
+	for _, s in ipairs(Talented.SYNASTRIA_DEFAULT_AUTOMATIC_BUFFS) do
+		automatic_buffs[s] = true
+	end
+	local misc_options = {}
+	for _, s in ipairs(Talented.SYNASTRIA_DEFAULT_MISC_OPTIONS) do
+		misc_options[s] = true
+	end
+	local tracking = {}
+	for _, s in ipairs(Talented.SYNASTRIA_DEFAULT_TRACKING) do
+		tracking[s] = true
+	end
+	return {
+		enabled = true,
+		simple_ids = simple_ids,
+		automatic_buffs = automatic_buffs,
+		misc_options = misc_options,
+		tracking = tracking
+	}
+end
+
+local function BuildSynastriaDefaultPerksOptionArgs()
+	local args = {
+		master = {
+			type = "toggle",
+			name = L["Apply default Synastria perks on login"],
+			desc = L["When enabled, the toggles below are applied after Synastria data is ready. Only enables perks that are off; nothing is turned off."],
+			order = 1,
+			width = "full",
+			get = function()
+				return Talented.db.profile.synastria_default_perks.enabled
+			end,
+			set = function(_, v)
+				Talented.db.profile.synastria_default_perks.enabled = v and true or false
+			end
+		},
+		h_simple = {
+			type = "header",
+			name = L["Perks (by ID)"],
+			order = 10
+		}
+	}
+	local order = 10
+	for _, entry in ipairs(Talented.SYNASTRIA_DEFAULT_PERK_SIMPLE) do
+		order = order + 1
+		args["simple_" .. entry.id] = {
+			type = "toggle",
+			name = entry.name,
+			desc = L["Try to enable this perk on login if it is off (uses the same click queue as build import)."],
+			order = order,
+			width = "full",
+			arg = entry.id,
+			get = function(info)
+				local id = info.arg
+				local t = Talented.db.profile.synastria_default_perks.simple_ids
+				return t[id] and true or false
+			end,
+			set = function(info, v)
+				local id = info.arg
+				Talented.db.profile.synastria_default_perks.simple_ids[id] = v and true or false
+			end
+		}
+	end
+	order = order + 1
+	args.h_buffs = {
+		type = "header",
+		name = L["Automatic Buffs (PerkOptions)"],
+		order = order
+	}
+	for i, name in ipairs(Talented.SYNASTRIA_DEFAULT_AUTOMATIC_BUFFS) do
+		order = order + 1
+		args["buff_" .. i] = {
+			type = "toggle",
+			name = name,
+			desc = L["Call ChangePerkOption for this sub-option when enabled."],
+			order = order,
+			width = "full",
+			arg = name,
+			get = function(info)
+				local key = info.arg
+				local t = Talented.db.profile.synastria_default_perks.automatic_buffs
+				return t[key] and true or false
+			end,
+			set = function(info, v)
+				local key = info.arg
+				Talented.db.profile.synastria_default_perks.automatic_buffs[key] = v and true or false
+			end
+		}
+	end
+	order = order + 1
+	args.h_misc = {
+		type = "header",
+		name = L["Misc Options (PerkOptions)"],
+		order = order
+	}
+	for i, name in ipairs(Talented.SYNASTRIA_DEFAULT_MISC_OPTIONS) do
+		order = order + 1
+		args["misc_" .. i] = {
+			type = "toggle",
+			name = name,
+			desc = L["Call ChangePerkOption for this sub-option when enabled."],
+			order = order,
+			width = "full",
+			arg = name,
+			get = function(info)
+				local key = info.arg
+				local t = Talented.db.profile.synastria_default_perks.misc_options
+				return t[key] and true or false
+			end,
+			set = function(info, v)
+				local key = info.arg
+				Talented.db.profile.synastria_default_perks.misc_options[key] = v and true or false
+			end
+		}
+	end
+	order = order + 1
+	args.h_track = {
+		type = "header",
+		name = L["Tracking (PerkOptions)"],
+		order = order
+	}
+	for i, name in ipairs(Talented.SYNASTRIA_DEFAULT_TRACKING) do
+		order = order + 1
+		args["track_" .. i] = {
+			type = "toggle",
+			name = name,
+			desc = L["Call ChangePerkOption for Tracking when enabled."],
+			order = order,
+			width = "full",
+			arg = name,
+			get = function(info)
+				local key = info.arg
+				local t = Talented.db.profile.synastria_default_perks.tracking
+				return t[key] and true or false
+			end,
+			set = function(info, v)
+				local key = info.arg
+				Talented.db.profile.synastria_default_perks.tracking[key] = v and true or false
+			end
+		}
+	end
+	return args
+end
+
 Talented.defaults = {
 	profile = {
 		confirmlearn = false,
@@ -15,7 +164,8 @@ Talented.defaults = {
 		glyph_on_talent_swap = "active",
 		restore_bars = false,
 		specNames = {},
-		debug_classswitch = false
+		debug_classswitch = false,
+		synastria_default_perks = BuildSynastriaDefaultPerksDefaults()
 	},
 	global = {
 		templates = {},
@@ -164,6 +314,13 @@ Talented.options = {
 					order = 15
 				}
 			}
+		},
+		synastria_defaults = {
+			name = L["Synastria defaults"],
+			desc = L["Default Synastria perks and PerkOptions applied on login."],
+			type = "group",
+			order = 100,
+			args = BuildSynastriaDefaultPerksOptionArgs()
 		},
 		apply = {
 			name = "Apply",
