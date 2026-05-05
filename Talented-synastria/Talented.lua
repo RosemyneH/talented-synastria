@@ -189,9 +189,6 @@ end
 
 function Talented:GetManualClassIndex()
 	local classes = self:GetPlayerClasses()
-	if self.manualClassIndex and classes[self.manualClassIndex] then
-		return self.manualClassIndex
-	end
 	if self.manualClassIndex and classes[self.manualClassIndex] == self.manualPlayerClass then
 		return self.manualClassIndex
 	end
@@ -668,7 +665,7 @@ function Talented:ScheduleInitialClassSync()
 			frame.elapsed = 0
 			Talented:RunNativeClassSync({
 				quiet = true,
-				allowNativeSelection = true,
+				allowNativeSelection = false,
 				onComplete = function()
 					Talented.initialClassSyncDone = true
 				end
@@ -804,6 +801,16 @@ function Talented:GetPlayerClasses()
 			end
 		end
 		if #classes > 0 then
+			local base = self:GetBasePlayerClass()
+			if base then
+				for i, name in ipairs(classes) do
+					if name == base and i > 1 then
+						table.remove(classes, i)
+						table.insert(classes, 1, base)
+						break
+					end
+				end
+			end
 			return classes
 		end
 	end
@@ -933,7 +940,7 @@ function Talented:GetCommunityBuildsForClass(className)
 		category = "Prestige",
 		subcategory = "Fae",
 		icon = "Interface\\Icons\\Spell_Frost_IceStorm",
-		url = "SUB2,\"Big Fuckin Blizzard\",\"\",\"Prestige\",\"Fae\",\"Interface\\Icons\\Spell_Frost_IceStorm\",\"MAGE,aD3A3mA21vmnot1AZmp0DdAm,DRUID,0f2AnFp02Bmrb0A5AoZAt30A,PERKS,P2136411W1B2I24DEv4111m6dDNJ1b2uCk41111\"",
+		url = "SUB2,\"Big Fuckin Blizzard\",\"\",\"Prestige\",\"Fae\",\"Interface\\Icons\\Spell_Frost_IceStorm\",\"DRUID,0f2AnFp02Bmrb0A5AoZAt30A,MAGE,aD3A3mA21vmnot1AZmp0DdAm,SAGE,SG2yzf1yzf1yzf1guByzf100guB,PERKS,P2136411W1B2I24DEv4111m6dDNJ1b2uC\"",
 		baseClass = "MAGE",
 		classes = "MAGE,DRUID"
 	})
@@ -4662,10 +4669,18 @@ do
 	end
 
 	local function GetClassIndex(self, className)
+		local classes = self:GetPlayerClasses()
 		if self.classIndexOverrides and self.classIndexOverrides[className] then
-			return self.classIndexOverrides[className]
+			local idx = self.classIndexOverrides[className]
+			if classes[idx] == className then
+				return idx
+			end
+			self.classIndexOverrides[className] = nil
+			if not next(self.classIndexOverrides) then
+				self.classIndexOverrides = nil
+			end
 		end
-		for index, name in ipairs(self:GetPlayerClasses()) do
+		for index, name in ipairs(classes) do
 			if name == className then
 				return index
 			end
@@ -4957,13 +4972,8 @@ do
 			EnsureClassForImport(self, template.class)
 		end
 		if not IsLiveTalentFrameClass(self, template.class) then
-			-- In custom multiclass environments the UI's live tab classifier can lag
-			-- behind manual class switches. If manual class is already target class,
-			-- continue instead of skipping import.
-			if not (self:IsCustomTalentEnvironment() and self:GetCurrentPlayerClass() == template.class) then
-				self:Print("Skipping %s template: class switch not ready.", template.class)
-				return false
-			end
+			self:Print("Skipping %s template: class switch not ready.", template.class)
+			return false
 		end
 		local group = GetActiveTalentGroup()
 		if not group then
@@ -5115,7 +5125,7 @@ do
 						preferredIndex = classIndex
 					}
 				})
-				QueueBuildAction(ActionTypes.DELAY, {duration = 0.55})
+				QueueBuildAction(ActionTypes.DELAY, {duration = 0.80})
 				if fallbackIndex then
 					QueueBuildAction(ActionTypes.CALL, {
 						fn = function(payload)
@@ -5128,7 +5138,7 @@ do
 							fallbackIndex = fallbackIndex
 						}
 					})
-					QueueBuildAction(ActionTypes.DELAY, {duration = 0.55})
+					QueueBuildAction(ActionTypes.DELAY, {duration = 0.80})
 				end
 
 				if record.spec then
@@ -5140,7 +5150,7 @@ do
 						end,
 						payload = {spec = record.spec}
 					})
-					QueueBuildAction(ActionTypes.DELAY, {duration = 0.50})
+					QueueBuildAction(ActionTypes.DELAY, {duration = 0.65})
 				end
 
 				local applyDone = {}
@@ -5185,7 +5195,7 @@ do
 							done = applyDone
 						}
 					})
-					QueueBuildAction(ActionTypes.DELAY, {duration = 0.55})
+					QueueBuildAction(ActionTypes.DELAY, {duration = 0.80})
 				end
 			end
 		end
